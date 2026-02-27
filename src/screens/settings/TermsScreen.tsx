@@ -5,9 +5,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { Text, TextInput, Button, useTheme, IconButton } from 'react-native-paper';
-import { spacing } from '../../theme';
+import { Text, TextInput, Button, useTheme, IconButton, Surface, Divider } from 'react-native-paper';
+import { spacing, borderRadius, shadows } from '../../theme';
 import { getPolicy, updatePolicy } from '../../services/policiesService';
+import WebContainer from '../../components/WebContainer';
 
 const DEFAULT_TERMS = `Terms & Conditions
 
@@ -97,7 +98,11 @@ export default function TermsScreen({ navigation }: any) {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
+      {/* Header */}
+      <Surface
+        style={[styles.header, { backgroundColor: theme.colors.surface }]}
+        elevation={1}
+      >
         <IconButton
           icon="arrow-left"
           size={24}
@@ -111,34 +116,84 @@ export default function TermsScreen({ navigation }: any) {
           size={24}
           onPress={() => (isEditing ? handleCancel() : setIsEditing(true))}
         />
-      </View>
+      </Surface>
 
-      <ScrollView style={styles.content}>
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" />
-            <Text variant="bodyMedium" style={{ marginTop: spacing.md }}>
-              Loading terms...
-            </Text>
-          </View>
-        ) : isEditing ? (
-          <TextInput
-            value={termsText}
-            onChangeText={setTermsText}
-            multiline
-            mode="outlined"
-            style={styles.textInput}
-            disabled={isSaving}
-          />
-        ) : (
-          <Text variant="bodyMedium" style={styles.text}>
-            {termsText}
-          </Text>
-        )}
-      </ScrollView>
+      <WebContainer maxWidth="lg">
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text variant="bodyLarge" style={{ marginTop: spacing.lg, color: theme.colors.onSurfaceVariant }}>
+                Loading terms...
+              </Text>
+            </View>
+          ) : (
+            <Surface
+              style={[
+                styles.contentCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  ...shadows.sm,
+                },
+              ]}
+            >
+              {/* Page Header */}
+              {!isEditing && (
+                <>
+                  <Text
+                    variant="headlineMedium"
+                    style={[styles.pageTitle, { color: theme.colors.onSurface }]}
+                  >
+                    Terms & Conditions
+                  </Text>
+                  <Text
+                    variant="bodyMedium"
+                    style={[styles.lastUpdated, { color: theme.colors.onSurfaceVariant }]}
+                  >
+                    Last Updated: {new Date().toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </Text>
+                  <Divider style={styles.divider} />
+                </>
+              )}
 
+              {/* Content */}
+              {isEditing ? (
+                <TextInput
+                  value={termsText}
+                  onChangeText={setTermsText}
+                  multiline
+                  mode="outlined"
+                  style={styles.textInput}
+                  disabled={isSaving}
+                  placeholder="Enter terms and conditions..."
+                />
+              ) : (
+                <Text
+                  variant="bodyMedium"
+                  style={[styles.text, { color: theme.colors.onSurface }]}
+                >
+                  {termsText}
+                </Text>
+              )}
+            </Surface>
+          )}
+        </ScrollView>
+      </WebContainer>
+
+      {/* Actions */}
       {isEditing && !isLoading && (
-        <View style={styles.actions}>
+        <Surface
+          style={[styles.actions, { backgroundColor: theme.colors.surface }]}
+          elevation={2}
+        >
           <Button
             mode="outlined"
             onPress={handleCancel}
@@ -156,7 +211,7 @@ export default function TermsScreen({ navigation }: any) {
           >
             Save Changes
           </Button>
-        </View>
+        </Surface>
       )}
     </KeyboardAvoidingView>
   );
@@ -170,34 +225,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
+    fontWeight: '600',
   },
-  content: {
+  scrollView: {
     flex: 1,
-    padding: spacing.lg,
+  },
+  scrollContent: {
+    padding: spacing.xl,
+  },
+  contentCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.xxxl,
+    marginBottom: spacing.xl,
+  },
+  pageTitle: {
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  lastUpdated: {
+    marginBottom: spacing.xl,
+  },
+  divider: {
+    marginBottom: spacing.xxxl,
   },
   loadingContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: spacing.xxl,
+    paddingVertical: spacing.xxxxl * 2,
   },
   text: {
-    lineHeight: 24,
+    lineHeight: 28,
+    fontSize: 15,
   },
   textInput: {
-    minHeight: 400,
+    minHeight: 500,
     textAlignVertical: 'top',
+    fontSize: 15,
+    lineHeight: 24,
   },
   actions: {
     flexDirection: 'row',
-    padding: spacing.md,
-    gap: spacing.md,
+    padding: spacing.xl,
+    gap: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   button: {
     flex: 1,

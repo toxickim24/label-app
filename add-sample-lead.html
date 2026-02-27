@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Add Sample Lead</title>
+  <meta charset="UTF-8">
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBgX9HogTN04R_pMOQksRR-hjo2bHKunIU",
+      authDomain: "label-app-b5e46.firebaseapp.com",
+      databaseURL: "https://label-app-b5e46-default-rtdb.firebaseio.com",
+      projectId: "label-app-b5e46",
+      storageBucket: "label-app-b5e46.firebasestorage.app",
+      messagingSenderId: "1037452577086",
+      appId: "1:1037452577086:web:d3549609238399103dc46f",
+      measurementId: "G-B478TNB29S"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const sampleLeads = [
+      {
+        recordId: 'POOL-2024-001',
+        firstName: 'John',
+        lastName: 'Smith',
+        fullName: 'John Smith',
+        phone1: '555-0101',
+        email1: 'john.smith@example.com',
+        fullAddress: '123 Main St, Los Angeles, CA 90001',
+        street: '123 Main St',
+        city: 'Los Angeles',
+        state: 'CA',
+        zip: '90001',
+        county: 'Los Angeles',
+        permitType: 'pool_permits',
+        status: 'new',
+      },
+      {
+        recordId: 'KB-2024-001',
+        firstName: 'Sarah',
+        lastName: 'Johnson',
+        fullName: 'Sarah Johnson',
+        phone1: '555-0102',
+        email1: 'sarah.j@example.com',
+        fullAddress: '456 Oak Ave, San Diego, CA 92101',
+        street: '456 Oak Ave',
+        city: 'San Diego',
+        state: 'CA',
+        zip: '92101',
+        county: 'San Diego',
+        permitType: 'kitchen_bath_permits',
+        status: 'new',
+      },
+      {
+        recordId: 'ROOF-2024-001',
+        firstName: 'Michael',
+        lastName: 'Davis',
+        fullName: 'Michael Davis',
+        phone1: '555-0103',
+        email1: 'mdavis@example.com',
+        fullAddress: '789 Pine Rd, San Francisco, CA 94102',
+        street: '789 Pine Rd',
+        city: 'San Francisco',
+        state: 'CA',
+        zip: '94102',
+        county: 'San Francisco',
+        permitType: 'roof_permits',
+        status: 'contacted',
+      },
+      {
+        recordId: 'KB-2024-002',
+        firstName: 'Emily',
+        lastName: 'Wilson',
+        fullName: 'Emily Wilson',
+        phone1: '555-0104',
+        phone2: '555-0105',
+        email1: 'emily.w@example.com',
+        fullAddress: '321 Elm St, Sacramento, CA 95814',
+        street: '321 Elm St',
+        city: 'Sacramento',
+        state: 'CA',
+        zip: '95814',
+        county: 'Sacramento',
+        permitType: 'kitchen_bath_permits',
+        status: 'responded',
+      },
+      {
+        recordId: 'POOL-2024-002',
+        firstName: 'David',
+        lastName: 'Brown',
+        fullName: 'David Brown',
+        phone1: '555-0106',
+        email1: 'dbrown@example.com',
+        fullAddress: '654 Maple Dr, Fresno, CA 93650',
+        street: '654 Maple Dr',
+        city: 'Fresno',
+        state: 'CA',
+        zip: '93650',
+        county: 'Fresno',
+        permitType: 'pool_permits',
+        status: 'qualified',
+      },
+    ];
+
+    window.addSampleLeads = async function() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const output = document.getElementById('output');
+
+      if (!email || !password) {
+        output.innerHTML = '❌ Please enter email and password<br>';
+        return;
+      }
+
+      try {
+        output.innerHTML = '🔐 Logging in...<br>';
+
+        await signInWithEmailAndPassword(auth, email, password);
+        output.innerHTML += '✅ Logged in successfully<br><br>';
+
+        output.innerHTML += '📝 Adding sample leads...<br><br>';
+
+        let added = 0;
+        for (const leadData of sampleLeads) {
+          const lead = {
+            ...leadData,
+            communications: [],
+            viewedBy: [],
+            isRead: false,
+            isFlagged: false,
+            notes: '',
+            createdDate: serverTimestamp(),
+            lastUpdated: serverTimestamp(),
+            importedAt: serverTimestamp(),
+          };
+
+          await addDoc(collection(db, 'leads'), lead);
+          added++;
+          output.innerHTML += `  ✅ ${added}/${sampleLeads.length}: Added ${lead.fullName} (${lead.permitType})<br>`;
+        }
+
+        output.innerHTML += '<br>═══════════════════════════════════════<br>';
+        output.innerHTML += '<strong>🎉 Sample Leads Added!</strong><br>';
+        output.innerHTML += '═══════════════════════════════════════<br>';
+        output.innerHTML += `✅ Successfully added: ${added} sample leads<br><br>`;
+        output.innerHTML += '<strong>Next Steps:</strong><br>';
+        output.innerHTML += '1. ✅ Refresh your app<br>';
+        output.innerHTML += '2. ✅ Check the Dashboard to see the leads<br>';
+        output.innerHTML += '3. ✅ Try different permit types and statuses<br>';
+
+      } catch (error) {
+        output.innerHTML += `<br>❌ <strong>Error:</strong> ${error.message}<br>`;
+        console.error('Full error:', error);
+      }
+    };
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .info {
+      background: #e3f2fd;
+      color: #1976d2;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #2196f3;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .info strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .info ul {
+      margin-top: 10px;
+      margin-left: 20px;
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      color: #555;
+      margin-bottom: 8px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #output {
+      margin-top: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      max-height: 400px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    #output:not(:empty) {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>➕ Add Sample Leads</h1>
+    <p class="subtitle">Quickly add test data to your database</p>
+
+    <div class="info">
+      <strong>ℹ️ This will add 5 sample leads:</strong>
+      <ul>
+        <li>2 Pool Permits</li>
+        <li>2 Kitchen & Bath Permits</li>
+        <li>1 Roof Permit</li>
+      </ul>
+      Perfect for testing the app!
+    </div>
+
+    <div class="input-group">
+      <label for="email">Admin Email</label>
+      <input
+        type="email"
+        id="email"
+        placeholder="admin@labelsalesagents.com"
+        value="admin@labelsalesagents.com"
+      >
+    </div>
+
+    <div class="input-group">
+      <label for="password">Password</label>
+      <input
+        type="password"
+        id="password"
+        placeholder="Enter your password"
+      >
+    </div>
+
+    <button onclick="addSampleLeads()">➕ Add 5 Sample Leads</button>
+
+    <div id="output"></div>
+  </div>
+</body>
+</html>

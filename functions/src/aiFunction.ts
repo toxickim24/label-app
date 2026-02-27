@@ -99,8 +99,7 @@ function getDefaultPrompt(permitType: string, category: string): string {
 function formatPermitType(permitType: string): string {
   const map: Record<string, string> = {
     pool_permits: 'Pool',
-    kitchen_permits: 'Kitchen',
-    bath_permits: 'Bath',
+    kitchen_bath_permits: 'Kitchen & Bath',
     roof_permits: 'Roof',
   };
   return map[permitType] || permitType;

@@ -41,21 +41,7 @@ export const createUserProfile = functions.auth.user().onCreate(async (user) => 
           manage_api: false,
           manage_users: false,
         },
-        kitchen_permits: {
-          view: false,
-          create: false,
-          edit: false,
-          delete: false,
-          text: false,
-          email: false,
-          export: false,
-          import: false,
-          reset_password: false,
-          manage_templates: false,
-          manage_api: false,
-          manage_users: false,
-        },
-        bath_permits: {
+        kitchen_bath_permits: {
           view: false,
           create: false,
           edit: false,

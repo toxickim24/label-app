@@ -21,6 +21,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Lead, Template } from '../types';
 import { spacing } from '../theme';
 import { API_CONFIG, API_ENDPOINTS } from '../config/api';
+import EmptyState from './EmptyState';
 import axios from 'axios';
 import { subscribeToTemplates } from '../services/templatesService';
 import { replaceTemplateVariables } from '../utils/templateVariables';
@@ -368,7 +369,17 @@ export default function SendMessageDialog({
                   {'\n'}Switch to {messageType === 'email' ? 'SMS' : 'Email'} or create templates in the Templates screen.
                 </Text>
               </View>
-            ) : null}
+            ) : (
+              <View style={styles.section}>
+                <EmptyState
+                  icon="text-box-outline"
+                  title="No Templates Available"
+                  description={`You need to create ${messageType === 'email' ? 'email' : 'SMS'} templates first. Go to the Templates tab to create reusable message templates for ${lead.permitType.replace(/_/g, ' ')}.`}
+                  compact
+                  style={{ marginVertical: 0 }}
+                />
+              </View>
+            )}
 
             <Divider style={styles.divider} />
 

@@ -8,7 +8,7 @@
 
 export type UserRole = 'master' | 'admin' | 'manager' | 'user';
 
-export type PermitType = 'pool_permits' | 'kitchen_permits' | 'bath_permits' | 'roof_permits';
+export type PermitType = 'pool_permits' | 'kitchen_bath_permits' | 'roof_permits';
 
 export interface Permission {
   view: boolean;
@@ -27,8 +27,7 @@ export interface Permission {
 
 export interface UserPermissions {
   pool_permits: Permission;
-  kitchen_permits: Permission;
-  bath_permits: Permission;
+  kitchen_bath_permits: Permission;
   roof_permits: Permission;
 }
 
@@ -61,7 +60,8 @@ export type LeadStatus =
   | 'responded'
   | 'qualified'
   | 'disqualified'
-  | 'converted';
+  | 'converted'
+  | 'invalid';
 
 export interface Communication {
   type: 'sms' | 'email';
@@ -87,23 +87,21 @@ export interface Lead {
   street: string;
   city: string;
   state: string;
-  zip: string;
+  zipCode: string;
   county: string;
 
   // Contact
   fullName: string;
   firstName: string;
   lastName: string;
-  phone1: string;
-  phone2?: string;
-  phone3?: string;
-  email1: string;
-  email2?: string;
-  email3?: string;
+  phoneNumbers: string[];  // Array of phone numbers
+  emails: string[];         // Array of emails
 
   // Permit
   permitType: PermitType;
   permitId?: string;
+  permitNumber?: string;
+  permitDate?: Date | null;
 
   // Status
   status: LeadStatus;
@@ -113,17 +111,19 @@ export interface Lead {
   lastContactedAt?: Date | null;
   lastContactedBy?: string | null;
   viewedBy: string[];
+  contactedCount?: number;
 
   // Timestamps
   createdDate: Date;
   lastUpdated: Date;
   importedAt?: Date;
   importedBy?: string;
+  source?: string;
 
   // Flags
   isRead: boolean;
   isFlagged: boolean;
-  notes: string;
+  notes: string[];  // Array of notes
 }
 
 // ============================================================================

@@ -5,7 +5,33 @@
 import { create } from 'zustand';
 import { User, Lead, Template, Notification, PermitType } from '../types';
 import { FirebaseAuth, FirebaseFirestore, buildQuery, isWeb } from '../config/firebase.helpers';
-import { firestore } from '../config/firebase';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit as firestoreLimit,
+  onSnapshot,
+  serverTimestamp,
+  writeBatch,
+  Timestamp,
+  getFirestore as getFirestoreInstance
+} from 'firebase/firestore';
+import { app } from '../config/firebase';
+
+// Helper to get firestore instance at runtime (avoids circular dependency issues)
+const getFirestore = () => {
+  const db = getFirestoreInstance(app);
+  console.log('🔥 getFirestore() called, instance:', !!db);
+  return db;
+};
 
 // ============================================================================
 // AUTH STORE
@@ -112,21 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             manage_api: false,
             manage_users: false,
           },
-          kitchen_permits: {
-            view: true,
-            create: false,
-            edit: false,
-            delete: false,
-            text: false,
-            email: false,
-            export: false,
-            import: false,
-            reset_password: false,
-            manage_templates: false,
-            manage_api: false,
-            manage_users: false,
-          },
-          bath_permits: {
+          kitchen_bath_permits: {
             view: true,
             create: false,
             edit: false,
@@ -324,19 +336,29 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const snapshot = await firestore()
-        .collection('leads')
-        .where('permitType', '==', permitType)
-        .orderBy('createdDate', 'desc')
-        .get();
+      const leadsRef = collection(getFirestore(), 'leads');
+      const q = query(leadsRef, where('permitType', '==', permitType), orderBy('createdDate', 'desc'));
+      const snapshot = await getDocs(q);
 
-      const leads = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdDate: doc.data().createdDate?.toDate() || new Date(),
-        lastUpdated: doc.data().lastUpdated?.toDate() || new Date(),
-        lastContactedAt: doc.data().lastContactedAt?.toDate(),
-      })) as Lead[];
+      const leads = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          // Ensure county is explicitly included
+          county: data.county || '',
+          // Handle zipCode field (map from 'zip' if 'zipCode' doesn't exist)
+          zipCode: data.zipCode || data.zip || '',
+          // Handle phoneNumbers array (map from phoneNumber if doesn't exist)
+          phoneNumbers: data.phoneNumbers || (data.phoneNumber ? [data.phoneNumber] : []),
+          // Handle emails array (map from email if doesn't exist)
+          emails: data.emails || (data.email ? [data.email] : []),
+          // Timestamps
+          createdDate: data.createdDate instanceof Timestamp ? data.createdDate.toDate() : new Date(),
+          lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(),
+          lastContactedAt: data.lastContactedAt instanceof Timestamp ? data.lastContactedAt.toDate() : null,
+        };
+      }) as Lead[];
 
       set({ leads, isLoading: false });
     } catch (error: any) {
@@ -357,30 +379,60 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
 
     set({ isLoading: true, error: null });
 
-    const newUnsubscribe = firestore()
-      .collection('leads')
-      .where('permitType', '==', permitType)
-      .orderBy('createdDate', 'desc')
-      .onSnapshot(
-        (snapshot) => {
-          const leads = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            createdDate: doc.data().createdDate?.toDate() || new Date(),
-            lastUpdated: doc.data().lastUpdated?.toDate() || new Date(),
-            lastContactedAt: doc.data().lastContactedAt?.toDate(),
-          })) as Lead[];
+    const leadsRef = collection(getFirestore(), 'leads');
+    const q = query(leadsRef, where('permitType', '==', permitType), orderBy('createdDate', 'desc'));
 
-          set({ leads, isLoading: false });
-        },
-        (error) => {
-          console.error('Subscribe to leads error:', error);
-          set({
-            isLoading: false,
-            error: error.message || 'Failed to subscribe to leads',
-          });
-        }
-      );
+    const newUnsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const leads = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+
+          // Map old field names to new ones
+          const lead: any = {
+            id: docSnap.id,
+            ...data,
+            // Ensure county is explicitly included
+            county: data.county || '',
+            // Handle zipCode field (map from 'zip' if 'zipCode' doesn't exist)
+            zipCode: data.zipCode || data.zip || '',
+            // Handle phoneNumbers array (map from phoneNumber if doesn't exist)
+            phoneNumbers: data.phoneNumbers || (data.phoneNumber ? [data.phoneNumber] : []),
+            // Handle emails array (map from email if doesn't exist)
+            emails: data.emails || (data.email ? [data.email] : []),
+            // Timestamps
+            createdDate: data.createdDate instanceof Timestamp ? data.createdDate.toDate() : new Date(),
+            lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(),
+            lastContactedAt: data.lastContactedAt instanceof Timestamp ? data.lastContactedAt.toDate() : null,
+          };
+
+          // Debug first lead
+          if (docSnap.id === snapshot.docs[0]?.id) {
+            console.log('📋 First lead loaded:', {
+              countyFromDB: data.county,
+              countyInLead: lead.county,
+              zipCode: lead.zipCode,
+              zipFromDB: data.zip,
+              zipCodeFromDB: data.zipCode,
+              phoneNumbers: lead.phoneNumbers,
+              emails: lead.emails,
+              allDataKeys: Object.keys(data).join(', '),
+            });
+          }
+
+          return lead;
+        }) as Lead[];
+
+        set({ leads, isLoading: false });
+      },
+      (error) => {
+        console.error('Subscribe to leads error:', error);
+        set({
+          isLoading: false,
+          error: error.message || 'Failed to subscribe to leads',
+        });
+      }
+    );
 
     set({ unsubscribe: newUnsubscribe });
   },
@@ -397,13 +449,12 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const docRef = await firestore()
-        .collection('leads')
-        .add({
-          ...lead,
-          createdDate: firestore.FieldValue.serverTimestamp(),
-          lastUpdated: firestore.FieldValue.serverTimestamp(),
-        });
+      const leadsRef = collection(getFirestore(), 'leads');
+      const docRef = await addDoc(leadsRef, {
+        ...lead,
+        createdDate: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      });
 
       set({ isLoading: false });
       return docRef.id;
@@ -420,18 +471,114 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
   updateLead: async (leadId: string, updates: Partial<Lead>) => {
     set({ isLoading: true, error: null });
 
+    let cleanUpdates: any = {};
     try {
-      await firestore()
-        .collection('leads')
-        .doc(leadId)
-        .update({
-          ...updates,
-          lastUpdated: firestore.FieldValue.serverTimestamp(),
-        });
+      console.log('🔍 Raw updates:', updates);
 
+      // Filter out undefined/null values and non-updatable fields
+      Object.keys(updates).forEach((key) => {
+        const value = (updates as any)[key];
+
+        // Skip old/legacy fields - we'll sync them from new fields
+        if (key === 'phone1' || key === 'phone2' || key === 'phone3' ||
+            key === 'email1' || key === 'email2' || key === 'email3' ||
+            key === 'phoneNumber' || key === 'email' || key === 'zip') {
+          console.log(`⏭️ Skipping legacy field: ${key}`);
+          return;
+        }
+
+        // Skip undefined, null, empty arrays, and internal fields
+        if (value !== undefined &&
+            key !== 'id' &&
+            key !== 'createdDate' &&
+            key !== 'createdAt' &&
+            key !== 'importedAt' &&
+            key !== 'importedBy') {
+
+          // Handle arrays - filter out empty strings
+          if (Array.isArray(value)) {
+            const filteredArray = value.filter(v => v !== '');
+            if (filteredArray.length > 0) {
+              cleanUpdates[key] = filteredArray;
+              console.log(`✅ Adding array field: ${key} = ${JSON.stringify(filteredArray)}`);
+
+              // Sync with legacy fields for backward compatibility
+              if (key === 'phoneNumbers') {
+                // Update phoneNumber (singular) to phoneNumbers[0]
+                cleanUpdates.phoneNumber = filteredArray[0] || '';
+                console.log(`  🔄 Syncing phoneNumber = ${filteredArray[0]}`);
+              } else if (key === 'emails') {
+                // Update email (singular) to emails[0]
+                cleanUpdates.email = filteredArray[0] || '';
+                console.log(`  🔄 Syncing email = ${filteredArray[0]}`);
+              }
+            }
+            return;
+          }
+
+          // Skip empty strings
+          if (value === '') {
+            return;
+          }
+
+          cleanUpdates[key] = value;
+          console.log(`✅ Adding field: ${key} = ${JSON.stringify(value)}`);
+        }
+      });
+
+      // Auto-update fullName if firstName or lastName changed
+      if (cleanUpdates.firstName || cleanUpdates.lastName) {
+        const firstName = cleanUpdates.firstName || updates.firstName || '';
+        const lastName = cleanUpdates.lastName || updates.lastName || '';
+        cleanUpdates.fullName = `${firstName} ${lastName}`.trim();
+        console.log(`🔄 Auto-updating fullName = "${cleanUpdates.fullName}"`);
+      }
+
+      // Delete redundant old fields if we're updating phoneNumbers or emails
+      if (cleanUpdates.phoneNumbers) {
+        cleanUpdates.phone1 = null;
+        cleanUpdates.phone2 = null;
+        cleanUpdates.phone3 = null;
+        console.log('🗑️ Marking phone1, phone2, phone3 for deletion');
+      }
+      if (cleanUpdates.emails) {
+        cleanUpdates.email1 = null;
+        cleanUpdates.email2 = null;
+        cleanUpdates.email3 = null;
+        console.log('🗑️ Marking email1, email2, email3 for deletion');
+      }
+      // Delete old 'zip' field if we're updating zipCode
+      if (cleanUpdates.zipCode) {
+        cleanUpdates.zip = null;
+        console.log('🗑️ Marking zip for deletion (using zipCode instead)');
+      }
+
+      console.log('📝 Clean updates to send:', cleanUpdates);
+
+      const db = getFirestore();
+      const leadRef = doc(db, 'leads', leadId);
+
+      // Use deleteField for proper deletion
+      const { deleteField } = await import('firebase/firestore');
+      const finalUpdates: any = { ...cleanUpdates };
+
+      // Convert null values to deleteField()
+      Object.keys(finalUpdates).forEach(key => {
+        if (finalUpdates[key] === null) {
+          finalUpdates[key] = deleteField();
+        }
+      });
+
+      await updateDoc(leadRef, {
+        ...finalUpdates,
+        lastUpdated: serverTimestamp(),
+      });
+
+      console.log('✅ Lead updated successfully');
       set({ isLoading: false });
     } catch (error: any) {
-      console.error('Update lead error:', error);
+      console.error('❌ Update lead error:', error);
+      console.error('❌ Update data:', cleanUpdates);
       set({
         isLoading: false,
         error: error.message || 'Failed to update lead',
@@ -444,7 +591,8 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      await firestore().collection('leads').doc(leadId).delete();
+      const leadRef = doc(getFirestore(), 'leads', leadId);
+      await deleteDoc(leadRef);
       set({ isLoading: false });
     } catch (error: any) {
       console.error('Delete lead error:', error);
@@ -524,25 +672,32 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      let query = firestore().collection('templates').where('isActive', '==', true);
+      const templatesRef = collection(getFirestore(), 'templates');
+      let constraints: any[] = [where('isActive', '==', true)];
 
       if (permitType) {
-        query = query.where('permitType', '==', permitType);
+        constraints.push(where('permitType', '==', permitType));
       }
 
       if (category) {
-        query = query.where('category', '==', category);
+        constraints.push(where('category', '==', category));
       }
 
-      const snapshot = await query.orderBy('createdAt', 'desc').get();
+      constraints.push(orderBy('createdAt', 'desc'));
 
-      const templates = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        lastUsedAt: doc.data().lastUsedAt?.toDate(),
-      })) as Template[];
+      const q = query(templatesRef, ...constraints);
+      const snapshot = await getDocs(q);
+
+      const templates = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
+          lastUsedAt: data.lastUsedAt instanceof Timestamp ? data.lastUsedAt.toDate() : null,
+        };
+      }) as Template[];
 
       set({ templates, isLoading: false });
     } catch (error: any) {
@@ -563,25 +718,34 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
 
     set({ isLoading: true, error: null });
 
-    let query = firestore().collection('templates').where('isActive', '==', true);
+    const templatesRef = collection(getFirestore(), 'templates');
+    let constraints: any[] = [where('isActive', '==', true)];
 
     if (permitType) {
-      query = query.where('permitType', '==', permitType);
+      constraints.push(where('permitType', '==', permitType));
     }
 
     if (category) {
-      query = query.where('category', '==', category);
+      constraints.push(where('category', '==', category));
     }
 
-    const newUnsubscribe = query.orderBy('createdAt', 'desc').onSnapshot(
+    constraints.push(orderBy('createdAt', 'desc'));
+
+    const q = query(templatesRef, ...constraints);
+
+    const newUnsubscribe = onSnapshot(
+      q,
       (snapshot) => {
-        const templates = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-          lastUsedAt: doc.data().lastUsedAt?.toDate(),
-        })) as Template[];
+        const templates = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
+            lastUsedAt: data.lastUsedAt instanceof Timestamp ? data.lastUsedAt.toDate() : null,
+          };
+        }) as Template[];
 
         set({ templates, isLoading: false });
       },
@@ -609,13 +773,12 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const docRef = await firestore()
-        .collection('templates')
-        .add({
-          ...template,
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+      const templatesRef = collection(getFirestore(), 'templates');
+      const docRef = await addDoc(templatesRef, {
+        ...template,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
       set({ isLoading: false });
       return docRef.id;
@@ -633,13 +796,11 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      await firestore()
-        .collection('templates')
-        .doc(templateId)
-        .update({
-          ...updates,
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+      const templateRef = doc(getFirestore(), 'templates', templateId);
+      await updateDoc(templateRef, {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      });
 
       set({ isLoading: false });
     } catch (error: any) {
@@ -657,13 +818,11 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
 
     try {
       // Soft delete - just set isActive to false
-      await firestore()
-        .collection('templates')
-        .doc(templateId)
-        .update({
-          isActive: false,
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+      const templateRef = doc(getFirestore(), 'templates', templateId);
+      await updateDoc(templateRef, {
+        isActive: false,
+        updatedAt: serverTimestamp(),
+      });
 
       set({ isLoading: false });
     } catch (error: any) {
@@ -713,19 +872,24 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const snapshot = await firestore()
-        .collection('notifications')
-        .where('userId', '==', userId)
-        .orderBy('createdAt', 'desc')
-        .limit(50)
-        .get();
+      const notificationsRef = collection(getFirestore(), 'notifications');
+      const q = query(
+        notificationsRef,
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc'),
+        firestoreLimit(50)
+      );
+      const snapshot = await getDocs(q);
 
-      const notifications = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        readAt: doc.data().readAt?.toDate(),
-      })) as Notification[];
+      const notifications = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+          readAt: data.readAt instanceof Timestamp ? data.readAt.toDate() : undefined,
+        };
+      }) as Notification[];
 
       const unreadCount = notifications.filter((n) => !n.isRead).length;
 
@@ -748,32 +912,39 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
     set({ isLoading: true, error: null });
 
-    const newUnsubscribe = firestore()
-      .collection('notifications')
-      .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .limit(50)
-      .onSnapshot(
-        (snapshot) => {
-          const notifications = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            readAt: doc.data().readAt?.toDate(),
-          })) as Notification[];
+    const notificationsRef = collection(getFirestore(), 'notifications');
+    const q = query(
+      notificationsRef,
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      firestoreLimit(50)
+    );
 
-          const unreadCount = notifications.filter((n) => !n.isRead).length;
+    const newUnsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const notifications = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+            readAt: data.readAt instanceof Timestamp ? data.readAt.toDate() : undefined,
+          };
+        }) as Notification[];
 
-          set({ notifications, unreadCount, isLoading: false });
-        },
-        (error) => {
-          console.error('Subscribe to notifications error:', error);
-          set({
-            isLoading: false,
-            error: error.message || 'Failed to subscribe to notifications',
-          });
-        }
-      );
+        const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+        set({ notifications, unreadCount, isLoading: false });
+      },
+      (error) => {
+        console.error('Subscribe to notifications error:', error);
+        set({
+          isLoading: false,
+          error: error.message || 'Failed to subscribe to notifications',
+        });
+      }
+    );
 
     set({ unsubscribe: newUnsubscribe });
   },
@@ -800,13 +971,11 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
       // Also update Firestore (will fail silently for mock data)
       try {
-        await firestore()
-          .collection('notifications')
-          .doc(notificationId)
-          .update({
-            isRead: true,
-            readAt: firestore.FieldValue.serverTimestamp(),
-          });
+        const notificationRef = doc(getFirestore(), 'notifications', notificationId);
+        await updateDoc(notificationRef, {
+          isRead: true,
+          readAt: serverTimestamp(),
+        });
       } catch (firestoreError) {
         // Ignore Firestore errors when using mock data
         console.log('Firestore update skipped (using mock data)');
@@ -831,18 +1000,20 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
       // If userId provided, also update Firestore
       if (userId) {
-        const snapshot = await firestore()
-          .collection('notifications')
-          .where('userId', '==', userId)
-          .where('isRead', '==', false)
-          .get();
+        const notificationsRef = collection(getFirestore(), 'notifications');
+        const q = query(
+          notificationsRef,
+          where('userId', '==', userId),
+          where('isRead', '==', false)
+        );
+        const snapshot = await getDocs(q);
 
-        const batch = firestore().batch();
+        const batch = writeBatch(getFirestore());
 
-        snapshot.docs.forEach((doc) => {
-          batch.update(doc.ref, {
+        snapshot.docs.forEach((docSnap) => {
+          batch.update(docSnap.ref, {
             isRead: true,
-            readAt: firestore.FieldValue.serverTimestamp(),
+            readAt: serverTimestamp(),
           });
         });
 
@@ -865,7 +1036,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
       // Also update Firestore (will fail silently for mock data)
       try {
-        await firestore().collection('notifications').doc(notificationId).delete();
+        const notificationRef = doc(getFirestore(), 'notifications', notificationId);
+        await deleteDoc(notificationRef);
       } catch (firestoreError) {
         // Ignore Firestore errors when using mock data
         console.log('Firestore delete skipped (using mock data)');
@@ -879,15 +1051,14 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
   clearAll: async (userId: string) => {
     try {
-      const snapshot = await firestore()
-        .collection('notifications')
-        .where('userId', '==', userId)
-        .get();
+      const notificationsRef = collection(getFirestore(), 'notifications');
+      const q = query(notificationsRef, where('userId', '==', userId));
+      const snapshot = await getDocs(q);
 
-      const batch = firestore().batch();
+      const batch = writeBatch(getFirestore());
 
-      snapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
+      snapshot.docs.forEach((docSnap) => {
+        batch.delete(docSnap.ref);
       });
 
       await batch.commit();

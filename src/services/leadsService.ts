@@ -71,6 +71,7 @@ function convertFirestoreToLead(id: string, data: any): Lead {
     city: data.city || '',
     state: data.state || '',
     zipCode: data.zipCode || '',
+    county: data.county || '',
 
     // Permit Info
     permitType: data.permitType || 'pool_permits',

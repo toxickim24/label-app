@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Migrate Permissions</title>
+  <meta charset="UTF-8">
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs, doc, updateDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBgX9HogTN04R_pMOQksRR-hjo2bHKunIU",
+      authDomain: "label-app-b5e46.firebaseapp.com",
+      databaseURL: "https://label-app-b5e46-default-rtdb.firebaseio.com",
+      projectId: "label-app-b5e46",
+      storageBucket: "label-app-b5e46.firebasestorage.app",
+      messagingSenderId: "1037452577086",
+      appId: "1:1037452577086:web:d3549609238399103dc46f",
+      measurementId: "G-B478TNB29S"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.runMigration = async function() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const output = document.getElementById('output');
+
+      if (!email || !password) {
+        output.innerHTML = '❌ Please enter email and password<br>';
+        return;
+      }
+
+      try {
+        output.innerHTML = '🔐 Logging in...<br>';
+
+        // Login
+        await signInWithEmailAndPassword(auth, email, password);
+        output.innerHTML += '✅ Logged in successfully<br><br>';
+
+        // Step 1: Migrate Users
+        output.innerHTML += '═══════════════════════════════════════<br>';
+        output.innerHTML += '<strong>📋 Step 1: Migrating User Permissions</strong><br>';
+        output.innerHTML += '═══════════════════════════════════════<br>';
+
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        let usersMigrated = 0;
+        let usersSkipped = 0;
+
+        for (const userDoc of usersSnapshot.docs) {
+          const userData = userDoc.data();
+          const permissions = userData.permissions;
+
+          if (permissions && (permissions.kitchen_permits || permissions.bath_permits)) {
+            // Use kitchen_permits as base, or bath_permits if kitchen doesn't exist
+            const basePermissions = permissions.kitchen_permits || permissions.bath_permits || {
+              view: false, create: false, edit: false, delete: false,
+              text: false, email: false, export: false, import: false,
+              reset_password: false, manage_templates: false,
+              manage_api: false, manage_users: false
+            };
+
+            const newPermissions = {
+              ...permissions,
+              kitchen_bath_permits: { ...basePermissions }
+            };
+
+            delete newPermissions.kitchen_permits;
+            delete newPermissions.bath_permits;
+
+            await updateDoc(doc(db, 'users', userDoc.id), {
+              permissions: newPermissions
+            });
+
+            output.innerHTML += `  ✅ Migrated: ${userData.email || userDoc.id}<br>`;
+            usersMigrated++;
+          } else if (permissions && permissions.kitchen_bath_permits) {
+            output.innerHTML += `  ⏭️  Skipped: ${userData.email || userDoc.id} (already combined)<br>`;
+            usersSkipped++;
+          }
+        }
+
+        output.innerHTML += `<br><strong>✅ Users Complete!</strong><br>`;
+        output.innerHTML += `   Migrated: ${usersMigrated} | Skipped: ${usersSkipped}<br><br>`;
+
+        // Step 2: Migrate Leads
+        output.innerHTML += '═══════════════════════════════════════<br>';
+        output.innerHTML += '<strong>📋 Step 2: Migrating Leads</strong><br>';
+        output.innerHTML += '═══════════════════════════════════════<br>';
+
+        const kitchenLeadsQuery = query(collection(db, 'leads'), where('permitType', '==', 'kitchen_permits'));
+        const bathLeadsQuery = query(collection(db, 'leads'), where('permitType', '==', 'bath_permits'));
+
+        const kitchenLeads = await getDocs(kitchenLeadsQuery);
+        const bathLeads = await getDocs(bathLeadsQuery);
+
+        let leadsMigrated = 0;
+
+        for (const leadDoc of kitchenLeads.docs) {
+          await updateDoc(doc(db, 'leads', leadDoc.id), {
+            permitType: 'kitchen_bath_permits'
+          });
+          output.innerHTML += `  ✅ Kitchen → Kitchen&Bath: ${leadDoc.data().fullName || leadDoc.id}<br>`;
+          leadsMigrated++;
+        }
+
+        for (const leadDoc of bathLeads.docs) {
+          await updateDoc(doc(db, 'leads', leadDoc.id), {
+            permitType: 'kitchen_bath_permits'
+          });
+          output.innerHTML += `  ✅ Bath → Kitchen&Bath: ${leadDoc.data().fullName || leadDoc.id}<br>`;
+          leadsMigrated++;
+        }
+
+        output.innerHTML += `<br><strong>✅ Leads Complete!</strong><br>`;
+        output.innerHTML += `   Kitchen: ${kitchenLeads.size} | Bath: ${bathLeads.size} | Total: ${leadsMigrated}<br><br>`;
+
+        // Step 3: Migrate Templates
+        output.innerHTML += '═══════════════════════════════════════<br>';
+        output.innerHTML += '<strong>📋 Step 3: Migrating Templates</strong><br>';
+        output.innerHTML += '═══════════════════════════════════════<br>';
+
+        const kitchenTemplatesQuery = query(collection(db, 'templates'), where('permitType', '==', 'kitchen_permits'));
+        const bathTemplatesQuery = query(collection(db, 'templates'), where('permitType', '==', 'bath_permits'));
+
+        const kitchenTemplates = await getDocs(kitchenTemplatesQuery);
+        const bathTemplates = await getDocs(bathTemplatesQuery);
+
+        let templatesMigrated = 0;
+
+        for (const templateDoc of kitchenTemplates.docs) {
+          await updateDoc(doc(db, 'templates', templateDoc.id), {
+            permitType: 'kitchen_bath_permits'
+          });
+          output.innerHTML += `  ✅ Kitchen → Kitchen&Bath: "${templateDoc.data().name}"<br>`;
+          templatesMigrated++;
+        }
+
+        for (const templateDoc of bathTemplates.docs) {
+          await updateDoc(doc(db, 'templates', templateDoc.id), {
+            permitType: 'kitchen_bath_permits'
+          });
+          output.innerHTML += `  ✅ Bath → Kitchen&Bath: "${templateDoc.data().name}"<br>`;
+          templatesMigrated++;
+        }
+
+        output.innerHTML += `<br><strong>✅ Templates Complete!</strong><br>`;
+        output.innerHTML += `   Kitchen: ${kitchenTemplates.size} | Bath: ${bathTemplates.size} | Total: ${templatesMigrated}<br><br>`;
+
+        // Summary
+        output.innerHTML += '═══════════════════════════════════════<br>';
+        output.innerHTML += '<strong>🎉 MIGRATION COMPLETE!</strong><br>';
+        output.innerHTML += '═══════════════════════════════════════<br>';
+        output.innerHTML += `<strong>Summary:</strong><br>`;
+        output.innerHTML += `   ✅ Users migrated: ${usersMigrated}<br>`;
+        output.innerHTML += `   ✅ Leads migrated: ${leadsMigrated}<br>`;
+        output.innerHTML += `   ✅ Templates migrated: ${templatesMigrated}<br><br>`;
+        output.innerHTML += `<strong>Next Steps:</strong><br>`;
+        output.innerHTML += `1. ✅ Check Firebase Console<br>`;
+        output.innerHTML += `2. ✅ All permissions now use kitchen_bath_permits<br>`;
+        output.innerHTML += `3. ✅ Refresh your app to see the changes<br>`;
+
+      } catch (error) {
+        output.innerHTML += `<br>❌ <strong>Error:</strong> ${error.message}<br>`;
+        console.error('Full error:', error);
+      }
+    };
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 700px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .info {
+      background: #e3f2fd;
+      color: #1976d2;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #2196f3;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .warning {
+      background: #fff3cd;
+      color: #856404;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #ffc107;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .info strong, .warning strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      color: #555;
+      margin-bottom: 8px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #output {
+      margin-top: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      max-height: 500px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    #output:not(:empty) {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 Migrate Permissions</h1>
+    <p class="subtitle">Combine kitchen & bath permits into kitchen_bath_permits</p>
+
+    <div class="info">
+      <strong>ℹ️ What this does:</strong>
+      This migration will combine separate kitchen_permits and bath_permits into a single kitchen_bath_permits permission for all users, leads, and templates.
+    </div>
+
+    <div class="warning">
+      <strong>⚠️ Important:</strong>
+      Make sure you are logged in as a Master admin. This operation will modify all data in your database.
+    </div>
+
+    <div class="input-group">
+      <label for="email">Admin Email</label>
+      <input
+        type="email"
+        id="email"
+        placeholder="admin@labelsalesagents.com"
+        value="admin@labelsalesagents.com"
+      >
+    </div>
+
+    <div class="input-group">
+      <label for="password">Password</label>
+      <input
+        type="password"
+        id="password"
+        placeholder="Enter your password"
+      >
+    </div>
+
+    <button onclick="runMigration()">🔄 Run Migration</button>
+
+    <div id="output"></div>
+  </div>
+</body>
+</html>

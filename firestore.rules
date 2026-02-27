@@ -1,0 +1,136 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return getUserData().role;
+    }
+
+    function isMaster() {
+      return isAuthenticated() && getUserRole() == 'master';
+    }
+
+    function isAdminOrMaster() {
+      return isAuthenticated() && getUserRole() in ['admin', 'master'];
+    }
+
+    function hasPermission(permitType, permission) {
+      return isAuthenticated() &&
+             getUserData().permissions[permitType][permission] == true;
+    }
+
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if false;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdminOrMaster());
+      allow delete: if false;
+    }
+
+    // ============================================
+    // LEADS COLLECTION
+    // ============================================
+
+    match /leads/{leadId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isAdminOrMaster();
+    }
+
+    // ============================================
+    // TEMPLATES COLLECTION
+    // ============================================
+
+    match /templates/{templateId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
+    // ============================================
+    // NOTIFICATIONS COLLECTION
+    // ============================================
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================
+    // POLICIES COLLECTION
+    // ============================================
+
+    match /policies/{policyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isMaster();
+    }
+
+    // ============================================
+    // API KEYS COLLECTION
+    // ============================================
+
+    match /api_keys/{keyId} {
+      allow read: if isAuthenticated() && isAdminOrMaster();
+      allow write: if isAuthenticated() && isMaster();
+    }
+
+    // ============================================
+    // CONFIG COLLECTION
+    // ============================================
+
+    match /config/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isMaster();
+    }
+
+    // ============================================
+    // OTHER COLLECTIONS
+    // ============================================
+
+    match /permits/{permitId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /ai_prompts/{promptId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /acceptance_logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAuthenticated() && isAdminOrMaster();
+      allow write: if false;
+    }
+
+    // ============================================
+    // DEFAULT DENY ALL
+    // ============================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

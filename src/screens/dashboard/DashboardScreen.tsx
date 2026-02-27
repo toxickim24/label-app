@@ -4,14 +4,18 @@
  */
 
 import React, { useEffect } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
-import { Text, Card, Chip, Searchbar, useTheme } from 'react-native-paper';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Platform } from 'react-native';
+import { Text, Card, Chip, Searchbar, useTheme, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useLeadsStore } from '../../store';
 import { subscribeToLeads } from '../../services/leadsService';
 import { Lead, PermitType } from '../../types';
 import { getStatusColor } from '../../theme';
-import { spacing } from '../../theme';
+import { spacing, borderRadius, shadows } from '../../theme';
+import WebContainer from '../../components/WebContainer';
+import EmptyState from '../../components/EmptyState';
+import { getLeadHealth, getLeadHealthInfo } from '../../utils/leadHealth';
+import { formatRelativeTime } from '../../utils/formatRelativeTime';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -90,54 +94,103 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     setRefreshing(false);
   }, []);
 
-  const renderLeadCard = ({ item }: { item: Lead }) => (
-    <TouchableOpacity
-      onPress={() => navigation.navigate('LeadDetail', { leadId: item.id })}
-      activeOpacity={0.7}
-    >
-      <Card style={styles.card} mode="elevated">
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <Text variant="titleMedium">{item.recordId}</Text>
-            <Chip
-              mode="flat"
-              style={{
-                backgroundColor: getStatusColor(item.status, theme.dark),
-              }}
-              textStyle={{ color: '#fff', fontSize: 12 }}
+  const renderLeadCard = ({ item }: { item: Lead }) => {
+    const leadHealth = getLeadHealth(item);
+    const healthInfo = getLeadHealthInfo(leadHealth);
+    const lastActivityDate = item.lastContactedAt || item.createdDate;
+
+    return (
+      <TouchableOpacity
+        onPress={() => navigation.navigate('LeadDetail', { leadId: item.id })}
+        activeOpacity={0.8}
+      >
+        <Surface
+          style={[
+            styles.card,
+            {
+              backgroundColor: theme.colors.surface,
+              borderLeftWidth: 4,
+              borderLeftColor: healthInfo.color,
+            },
+            shadows.sm,
+          ]}
+        >
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            <Icon
+              name={
+                item.permitType === 'pool_permits'
+                  ? 'pool'
+                  : item.permitType === 'kitchen_bath_permits'
+                  ? 'silverware-fork-knife'
+                  : 'home-roof'
+              }
+              size={20}
+              color={theme.colors.primary}
+              style={styles.cardIcon}
+            />
+            <Text
+              variant="labelLarge"
+              style={[styles.recordId, { color: theme.colors.onSurfaceVariant }]}
             >
-              {item.status.toUpperCase()}
-            </Chip>
+              {item.recordId}
+            </Text>
           </View>
+          <Chip
+            mode="flat"
+            compact
+            style={{
+              backgroundColor: getStatusColor(item.status, theme.dark),
+              height: 28,
+            }}
+            textStyle={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600' }}
+          >
+            {item.status.toUpperCase()}
+          </Chip>
+        </View>
 
-          <Text variant="titleLarge" style={styles.name}>
-            {item.fullName}
-          </Text>
+        <Text variant="titleMedium" style={[styles.name, { color: theme.colors.onSurface }]}>
+          {item.fullName}
+        </Text>
 
-          <Text variant="bodyMedium" style={styles.address}>
+        <View style={styles.addressRow}>
+          <Icon name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+          <Text
+            variant="bodyMedium"
+            style={[styles.address, { color: theme.colors.onSurfaceVariant }]}
+          >
             {item.fullAddress}
           </Text>
+        </View>
 
-          <View style={styles.footer}>
-            <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
-              {item.permitType.replace('_', ' ').toUpperCase()}
-            </Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
-              {new Date(item.createdDate).toLocaleDateString()}
+        <View style={styles.footer}>
+          <View style={styles.footerLeft}>
+            <View style={styles.footerBadge}>
+              <Text
+                variant="labelSmall"
+                style={[styles.footerBadgeText, { color: theme.colors.primary }]}
+              >
+                {item.permitType.replace(/_/g, ' ').replace('permits', '').trim().toUpperCase()}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.footerRight}>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              {formatRelativeTime(lastActivityDate)}
             </Text>
           </View>
-        </Card.Content>
-      </Card>
+        </View>
+      </Surface>
     </TouchableOpacity>
-  );
+    );
+  };
 
-  const statusFilters = ['all', 'new', 'contacted', 'responded', 'qualified'];
+  const statusFilters = ['all', 'new', 'contacted', 'responded', 'qualified', 'disqualified', 'converted', 'invalid'];
 
   const permitTypes = [
     { id: 'all', label: 'All Permits', icon: 'view-grid' },
     { id: 'pool_permits', label: 'Pool', icon: 'pool' },
-    { id: 'kitchen_permits', label: 'Kitchen', icon: 'silverware-fork-knife' },
-    { id: 'bath_permits', label: 'Bath', icon: 'shower' },
+    { id: 'kitchen_bath_permits', label: 'Kitchen & Bath', icon: 'silverware-fork-knife' },
     { id: 'roof_permits', label: 'Roof', icon: 'home-roof' },
   ];
 
@@ -151,118 +204,133 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Permit Type Selector */}
-      <View style={styles.permitTypesContainer}>
-        {permitTypes.map((permit) => {
-          const count = getPermitTypeCount(permit.id);
-          return (
-            <TouchableOpacity
-              key={permit.id}
-              style={[
-                styles.permitTypeCard,
-                {
-                  backgroundColor: selectedPermitType === permit.id
-                    ? theme.colors.primary
-                    : theme.colors.surface,
-                  borderColor: theme.colors.primary,
-                },
-              ]}
-              onPress={() => setSelectedPermitType(permit.id as PermitType | 'all')}
-            >
-              {/* Count Badge */}
-              <View
+      <WebContainer>
+        {/* Permit Type Selector */}
+        <View style={styles.permitTypesContainer}>
+          {permitTypes.map((permit) => {
+            const count = getPermitTypeCount(permit.id);
+            const isSelected = selectedPermitType === permit.id;
+            return (
+              <TouchableOpacity
+                key={permit.id}
                 style={[
-                  styles.countBadge,
+                  styles.permitTypeCard,
                   {
-                    backgroundColor: selectedPermitType === permit.id
-                      ? 'rgba(255, 255, 255, 0.9)'
-                      : theme.colors.primaryContainer,
-                  },
-                ]}
-              >
-                <Text
-                  variant="labelSmall"
-                  style={{
-                    color: selectedPermitType === permit.id
+                    backgroundColor: isSelected
                       ? theme.colors.primary
-                      : theme.colors.onPrimaryContainer,
-                    fontWeight: '700',
-                    fontSize: 10,
+                      : theme.colors.surface,
+                    borderColor: isSelected ? theme.colors.primary : theme.colors.outline,
+                  },
+                  isSelected ? shadows.md : shadows.sm,
+                ]}
+                onPress={() => setSelectedPermitType(permit.id as PermitType | 'all')}
+                activeOpacity={0.8}
+              >
+                {/* Count Badge */}
+                <View
+                  style={[
+                    styles.countBadge,
+                    {
+                      backgroundColor: isSelected
+                        ? 'rgba(255, 255, 255, 0.95)'
+                        : theme.colors.primaryContainer,
+                    },
+                  ]}
+                >
+                  <Text
+                    variant="labelMedium"
+                    style={{
+                      color: isSelected
+                        ? theme.colors.primary
+                        : theme.colors.onPrimaryContainer,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {count}
+                  </Text>
+                </View>
+                <Icon
+                  name={permit.icon}
+                  size={32}
+                  color={isSelected ? '#FFFFFF' : theme.colors.primary}
+                />
+                <Text
+                  variant="labelMedium"
+                  style={{
+                    color: isSelected ? '#FFFFFF' : theme.colors.onSurface,
+                    marginTop: spacing.sm,
+                    textAlign: 'center',
+                    fontWeight: '600',
                   }}
                 >
-                  {count}
+                  {permit.label}
                 </Text>
-              </View>
-              <Icon
-                name={permit.icon}
-                size={28}
-                color={selectedPermitType === permit.id ? '#fff' : theme.colors.primary}
-              />
-              <Text
-                variant="labelSmall"
-                style={{
-                  color: selectedPermitType === permit.id ? '#fff' : theme.colors.onSurface,
-                  marginTop: 4,
-                  textAlign: 'center',
-                  fontSize: 11,
-                }}
-              >
-                {permit.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      {/* Search Bar */}
-      <Searchbar
-        placeholder="Search leads..."
-        onChangeText={setSearchQuery}
-        value={searchQuery}
-        style={styles.searchBar}
-      />
+        {/* Search Bar */}
+        <Searchbar
+          placeholder="Search by name, address, phone, or email..."
+          onChangeText={setSearchQuery}
+          value={searchQuery}
+          style={[styles.searchBar, { backgroundColor: theme.colors.surface }]}
+          iconColor={theme.colors.primary}
+          elevation={1}
+        />
 
-      {/* Status Filters */}
-      <View style={styles.filters}>
-        {statusFilters.map((status) => (
-          <Chip
-            key={status}
-            selected={statusFilter === status}
-            onPress={() => setStatusFilter(status)}
-            style={styles.filterChip}
+        {/* Status Filters */}
+        <View style={styles.filters}>
+          <Text
+            variant="labelMedium"
+            style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}
           >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </Chip>
-        ))}
-      </View>
+            Status:
+          </Text>
+          {statusFilters.map((status) => (
+            <Chip
+              key={status}
+              selected={statusFilter === status}
+              onPress={() => setStatusFilter(status)}
+              style={styles.filterChip}
+              mode={statusFilter === status ? 'flat' : 'outlined'}
+            >
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </Chip>
+          ))}
+        </View>
 
-      {/* Lead Count */}
-      <View style={styles.countContainer}>
-        <Text variant="bodyMedium" style={{ color: theme.colors.secondary }}>
-          {filteredLeads.length} leads found
-        </Text>
-      </View>
+        {/* Lead Count */}
+        <View style={styles.countContainer}>
+          <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>
+            {filteredLeads.length} {filteredLeads.length === 1 ? 'Lead' : 'Leads'}
+          </Text>
+        </View>
 
-      {/* Leads List */}
-      <FlatList
-        data={filteredLeads}
-        renderItem={renderLeadCard}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text variant="titleMedium" style={{ color: theme.colors.secondary }}>
-              No leads found
-            </Text>
-            <Text variant="bodyMedium" style={{ color: theme.colors.secondary, marginTop: 8 }}>
-              Try adjusting your filters or search query
-            </Text>
-          </View>
-        }
-      />
+        {/* Leads List */}
+        <FlatList
+          data={filteredLeads}
+          renderItem={renderLeadCard}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon="folder-open-outline"
+              title="No Leads Found"
+              description={
+                searchQuery || statusFilter !== 'all'
+                  ? 'Try adjusting your filters or search query'
+                  : 'Get started by importing leads or creating new ones'
+              }
+            />
+          }
+        />
+      </WebContainer>
     </View>
   );
 }
@@ -274,77 +342,130 @@ const styles = StyleSheet.create({
   permitTypesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: spacing.md,
-    gap: spacing.sm,
+    padding: spacing.xl,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
     justifyContent: 'space-between',
   },
   permitTypeCard: {
-    width: '18%',
-    minWidth: 70,
+    width: '22%',
+    minWidth: 80,
     alignItems: 'center',
-    padding: spacing.sm,
-    borderRadius: 12,
-    borderWidth: 2,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
     position: 'relative',
+    ...Platform.select({
+      web: {
+        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+      },
+    }),
   },
   countBadge: {
     position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    top: spacing.sm,
+    right: spacing.sm,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: spacing.sm,
     zIndex: 1,
   },
   searchBar: {
-    margin: spacing.md,
-    marginTop: 0,
-    marginBottom: spacing.sm,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.lg,
   },
   filters: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
     gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  filterLabel: {
+    marginRight: spacing.sm,
+    fontWeight: '600',
   },
   filterChip: {
     marginRight: spacing.sm,
   },
   countContainer: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
   },
   list: {
-    padding: spacing.md,
+    padding: spacing.xl,
     paddingTop: 0,
   },
   card: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    ...Platform.select({
+      web: {
+        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+      },
+    }),
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
-  name: {
-    marginBottom: spacing.xs,
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cardIcon: {
+    marginRight: spacing.sm,
+  },
+  recordId: {
     fontWeight: '600',
   },
-  address: {
+  name: {
     marginBottom: spacing.md,
+    fontWeight: '600',
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  address: {
+    flex: 1,
+    lineHeight: 20,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: spacing.sm,
-  },
-  emptyContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xxl,
+  },
+  footerLeft: {
+    flex: 1,
+  },
+  footerRight: {
+    alignItems: 'flex-end',
+  },
+  footerBadge: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    alignSelf: 'flex-start',
+  },
+  footerBadgeText: {
+    fontWeight: '600',
+    fontSize: 11,
   },
 });

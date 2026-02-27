@@ -4,11 +4,12 @@
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, TextInput, Button, useTheme } from 'react-native-paper';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Text, TextInput, Button, useTheme, Surface, Divider } from 'react-native-paper';
 import Logo from '../../components/Logo';
 import { useAuthStore } from '../../store';
-import { spacing } from '../../theme';
+import { spacing, borderRadius, shadows, typography } from '../../theme';
+import WebContainer from '../../components/WebContainer';
 
 export default function LoginScreen() {
   const theme = useTheme();
@@ -30,69 +31,138 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.dark
+            ? theme.colors.background
+            : '#F8F9FA',
+        },
+      ]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
-        <View style={styles.logoContainer}>
-          <Logo size={100} variant="favicon" />
-        </View>
-        <Text variant="displaySmall" style={styles.title}>
-          Label
-        </Text>
-        <Text variant="bodyLarge" style={[styles.subtitle, { color: theme.colors.secondary }]}>
-          Manage leads. Close deals.
-        </Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <WebContainer maxWidth="sm">
+          <View style={styles.centerContainer}>
+            <Surface
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.colors.surface,
+                },
+                shadows.md,
+              ]}
+            >
+              {/* Logo & Branding */}
+              <View style={styles.header}>
+                <View style={styles.logoContainer}>
+                  <Logo size={64} variant="favicon" />
+                </View>
+                <Text
+                  variant="headlineMedium"
+                  style={[
+                    styles.title,
+                    {
+                      color: theme.colors.onSurface,
+                      ...typography.h1,
+                    },
+                  ]}
+                >
+                  Welcome to Label
+                </Text>
+                <Text
+                  variant="bodyMedium"
+                  style={[
+                    styles.subtitle,
+                    {
+                      color: theme.colors.onSurfaceVariant,
+                    },
+                  ]}
+                >
+                  Manage leads efficiently and close more deals
+                </Text>
+              </View>
 
-        <View style={styles.form}>
-          <TextInput
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            mode="outlined"
-            style={styles.input}
-            error={!!error}
-          />
+              <Divider style={styles.divider} />
 
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="password"
-            mode="outlined"
-            style={styles.input}
-            error={!!error}
-          />
+              {/* Form */}
+              <View style={styles.form}>
+                <TextInput
+                  label="Email Address"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  mode="outlined"
+                  style={styles.input}
+                  error={!!error}
+                  left={<TextInput.Icon icon="email-outline" />}
+                />
 
-          {error ? (
-            <Text variant="bodySmall" style={styles.error}>
-              {error}
-            </Text>
-          ) : null}
+                <TextInput
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoComplete="password"
+                  mode="outlined"
+                  style={styles.input}
+                  error={!!error}
+                  left={<TextInput.Icon icon="lock-outline" />}
+                />
 
-          <Button
-            mode="contained"
-            onPress={handleLogin}
-            loading={isLoading}
-            disabled={isLoading}
-            style={styles.button}
-          >
-            Login
-          </Button>
+                {error ? (
+                  <View style={styles.errorContainer}>
+                    <Text
+                      variant="bodySmall"
+                      style={[styles.error, { color: theme.colors.error }]}
+                    >
+                      {error}
+                    </Text>
+                  </View>
+                ) : null}
 
-          <Button mode="text" onPress={() => console.log('Forgot password')}>
-            Forgot Password?
-          </Button>
-        </View>
+                <Button
+                  mode="contained"
+                  onPress={handleLogin}
+                  loading={isLoading}
+                  disabled={isLoading || !email || !password}
+                  style={styles.button}
+                  contentStyle={styles.buttonContent}
+                >
+                  Sign In
+                </Button>
 
-        <Text variant="bodySmall" style={[styles.info, { color: theme.colors.secondary }]}>
-          Powered by Firebase Authentication
-        </Text>
-      </View>
+                <Button
+                  mode="text"
+                  onPress={() => console.log('Forgot password')}
+                  style={styles.forgotButton}
+                >
+                  Forgot Password?
+                </Button>
+              </View>
+
+              {/* Footer */}
+              <View style={styles.footer}>
+                <Text
+                  variant="bodySmall"
+                  style={[
+                    styles.footerText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Secured by Firebase Authentication
+                </Text>
+              </View>
+            </Surface>
+          </View>
+        </WebContainer>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -101,41 +171,82 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingVertical: spacing.xxxxl,
+  },
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
-    padding: spacing.xxl,
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 440,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxxl,
+    ...Platform.select({
+      web: {
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.06)',
+      },
+    }),
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
   logoContainer: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   title: {
     textAlign: 'center',
-    fontWeight: 'bold',
-    marginBottom: spacing.sm,
+    fontWeight: '700',
+    marginBottom: spacing.md,
   },
   subtitle: {
     textAlign: 'center',
-    marginBottom: spacing.xxl,
+    lineHeight: 22,
+  },
+  divider: {
+    marginVertical: spacing.xl,
   },
   form: {
-    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
   },
   input: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 59, 48, 0.08)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  error: {
+    textAlign: 'center',
+    fontWeight: '500',
   },
   button: {
     marginTop: spacing.md,
     marginBottom: spacing.md,
   },
-  error: {
-    color: 'red',
-    marginBottom: spacing.md,
+  buttonContent: {
+    height: 48,
+    paddingHorizontal: spacing.xl,
   },
-  info: {
-    textAlign: 'center',
-    marginTop: spacing.xxl,
-    fontStyle: 'italic',
+  forgotButton: {
+    marginTop: spacing.sm,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  footerText: {
+    fontSize: 12,
   },
 });

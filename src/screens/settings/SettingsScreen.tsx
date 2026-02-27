@@ -8,6 +8,7 @@ import { View, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
 import { Text, List, Switch, Button, Divider, useTheme, Avatar, Appbar } from 'react-native-paper';
 import { useAuthStore, useThemeStore } from '../../store';
 import { spacing } from '../../theme';
+import WebContainer from '../../components/WebContainer';
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
@@ -46,127 +47,129 @@ export default function SettingsScreen({ navigation }: any) {
       </Appbar.Header>
 
       <ScrollView>
-        {/* Profile Section */}
-      <View style={styles.profileSection}>
-        <Avatar.Text
-          size={80}
-          label={user?.displayName?.charAt(0) || 'U'}
-          style={{ backgroundColor: theme.colors.primary }}
-        />
-        <Text variant="titleLarge" style={styles.displayName}>
-          {user?.displayName || 'User'}
-        </Text>
-        <Text variant="bodyMedium" style={{ color: theme.colors.secondary }}>
-          {user?.email}
-        </Text>
-        <Text
-          variant="bodySmall"
-          style={{
-            color: theme.colors.primary,
-            marginTop: spacing.xs,
-            textTransform: 'uppercase',
-            fontWeight: '600',
-          }}
-        >
-          {user?.role}
-        </Text>
-      </View>
-
-      <Divider />
-
-      {/* Theme Section */}
-      <List.Section>
-        <List.Subheader>Preferences</List.Subheader>
-
-        <List.Item
-          title="Light Mode"
-          left={(props) => <List.Icon {...props} icon="white-balance-sunny" />}
-          right={() => (
-            <Switch
-              value={mode === 'light'}
-              onValueChange={() => setTheme('light')}
+        <WebContainer>
+          {/* Profile Section */}
+          <View style={styles.profileSection}>
+            <Avatar.Text
+              size={80}
+              label={user?.displayName?.charAt(0) || 'U'}
+              style={{ backgroundColor: theme.colors.primary }}
             />
-          )}
-        />
+            <Text variant="titleLarge" style={styles.displayName}>
+              {user?.displayName || 'User'}
+            </Text>
+            <Text variant="bodyMedium" style={{ color: theme.colors.secondary }}>
+              {user?.email}
+            </Text>
+            <Text
+              variant="bodySmall"
+              style={{
+                color: theme.colors.primary,
+                marginTop: spacing.xs,
+                textTransform: 'uppercase',
+                fontWeight: '600',
+              }}
+            >
+              {user?.role}
+            </Text>
+          </View>
 
-        <List.Item
-          title="Dark Mode"
-          left={(props) => <List.Icon {...props} icon="moon-waning-crescent" />}
-          right={() => (
-            <Switch
-              value={mode === 'dark'}
-              onValueChange={() => setTheme('dark')}
+          <Divider />
+
+          {/* Theme Section */}
+          <List.Section>
+            <List.Subheader>Preferences</List.Subheader>
+
+            <List.Item
+              title="Light Mode"
+              left={(props) => <List.Icon {...props} icon="white-balance-sunny" />}
+              right={() => (
+                <Switch
+                  value={mode === 'light'}
+                  onValueChange={() => setTheme('light')}
+                />
+              )}
             />
-          )}
-        />
 
-        <List.Item
-          title="Auto (System)"
-          description="Follow system theme"
-          left={(props) => <List.Icon {...props} icon="brightness-auto" />}
-          right={() => (
-            <Switch
-              value={mode === 'system'}
-              onValueChange={() => setTheme('system')}
+            <List.Item
+              title="Dark Mode"
+              left={(props) => <List.Icon {...props} icon="moon-waning-crescent" />}
+              right={() => (
+                <Switch
+                  value={mode === 'dark'}
+                  onValueChange={() => setTheme('dark')}
+                />
+              )}
             />
-          )}
-        />
-      </List.Section>
 
-      <Divider />
+            <List.Item
+              title="Auto (System)"
+              description="Follow system theme"
+              left={(props) => <List.Icon {...props} icon="brightness-auto" />}
+              right={() => (
+                <Switch
+                  value={mode === 'system'}
+                  onValueChange={() => setTheme('system')}
+                />
+              )}
+            />
+          </List.Section>
 
-      {/* About Section */}
-      <List.Section>
-        <List.Subheader>About</List.Subheader>
+          <Divider />
 
-        <List.Item
-          title="App Version"
-          description="1.0.0"
-          left={(props) => <List.Icon {...props} icon="information" />}
-        />
+          {/* About Section */}
+          <List.Section>
+            <List.Subheader>About</List.Subheader>
 
-        <List.Item
-          title="Terms & Conditions"
-          left={(props) => <List.Icon {...props} icon="file-document" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={() => navigation.navigate('Terms')}
-        />
+            <List.Item
+              title="App Version"
+              description="1.0.0"
+              left={(props) => <List.Icon {...props} icon="information" />}
+            />
 
-        <List.Item
-          title="Privacy Policy"
-          left={(props) => <List.Icon {...props} icon="shield-check" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={() => navigation.navigate('PrivacyPolicy')}
-        />
+            <List.Item
+              title="Terms & Conditions"
+              left={(props) => <List.Icon {...props} icon="file-document" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => navigation.navigate('Terms')}
+            />
 
-        <List.Item
-          title="Contact Support"
-          left={(props) => <List.Icon {...props} icon="help-circle" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={() => console.log('Contact Support')}
-        />
-      </List.Section>
+            <List.Item
+              title="Privacy Policy"
+              left={(props) => <List.Icon {...props} icon="shield-check" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => navigation.navigate('PrivacyPolicy')}
+            />
 
-      <Divider />
+            <List.Item
+              title="Contact Support"
+              left={(props) => <List.Icon {...props} icon="help-circle" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => console.log('Contact Support')}
+            />
+          </List.Section>
 
-      {/* Account Section */}
-      <View style={styles.accountSection}>
-        <Button
-          mode="outlined"
-          onPress={handleLogout}
-          icon="logout"
-          style={styles.logoutButton}
-        >
-          Logout
-        </Button>
-      </View>
+          <Divider />
 
-      <View style={styles.footer}>
-        <Text variant="bodySmall" style={{ color: theme.colors.secondary, textAlign: 'center' }}>
-          Label App{'\n'}
-          Manage leads. Close deals.
-        </Text>
-      </View>
+          {/* Account Section */}
+          <View style={styles.accountSection}>
+            <Button
+              mode="outlined"
+              onPress={handleLogout}
+              icon="logout"
+              style={styles.logoutButton}
+            >
+              Logout
+            </Button>
+          </View>
+
+          <View style={styles.footer}>
+            <Text variant="bodySmall" style={{ color: theme.colors.secondary, textAlign: 'center' }}>
+              Label App{'\n'}
+              Manage leads. Close deals.
+            </Text>
+          </View>
+        </WebContainer>
       </ScrollView>
     </View>
   );

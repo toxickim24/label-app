@@ -10,6 +10,8 @@ import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTemplatesStore } from '../../store';
 import { Template, PermitType, TemplateCategory } from '../../types';
 import { spacing } from '../../theme';
+import InfoPanel from '../../components/InfoPanel';
+import EmptyState from '../../components/EmptyState';
 import { generateAITemplate } from '../../services/aiService';
 import {
   subscribeToTemplates,
@@ -275,8 +277,7 @@ export default function TemplatesScreen() {
                   value={selectedPermitType}
                 >
                   <RadioButton.Item label="Pool Permits" value="pool_permits" />
-                  <RadioButton.Item label="Kitchen Permits" value="kitchen_permits" />
-                  <RadioButton.Item label="Bath Permits" value="bath_permits" />
+                  <RadioButton.Item label="Kitchen & Bath Permits" value="kitchen_bath_permits" />
                   <RadioButton.Item label="Roof Permits" value="roof_permits" />
                 </RadioButton.Group>
 
@@ -354,20 +355,47 @@ export default function TemplatesScreen() {
                 />
 
                 {/* Template Variables Guide */}
-                <View style={styles.variablesGuide}>
-                  <Text variant="labelSmall" style={{ fontWeight: 'bold', marginBottom: spacing.xs }}>
-                    💡 Available Variables:
-                  </Text>
-                  <Text variant="bodySmall" style={{ fontFamily: 'monospace', lineHeight: 18 }}>
-                    {`{firstName} {lastName} {fullName}
-{primaryPhone} {primaryEmail}
-{fullAddress} {street} {city} {state} {zip}
-{permitType} {permitNumber} {permitDate}`}
-                  </Text>
-                  <Text variant="bodySmall" style={{ marginTop: spacing.xs, fontStyle: 'italic' }}>
-                    These will be replaced with actual lead data when used.
-                  </Text>
-                </View>
+                <InfoPanel
+                  icon="code-braces"
+                  title="Available Variables"
+                  subtitle="Use these in your template - they'll be replaced with actual lead data"
+                  sections={[
+                    {
+                      title: 'Identity',
+                      items: [
+                        { label: '{firstName}', isVariable: true },
+                        { label: '{lastName}', isVariable: true },
+                        { label: '{fullName}', isVariable: true },
+                      ],
+                    },
+                    {
+                      title: 'Contact',
+                      items: [
+                        { label: '{primaryPhone}', isVariable: true },
+                        { label: '{primaryEmail}', isVariable: true },
+                      ],
+                    },
+                    {
+                      title: 'Address',
+                      items: [
+                        { label: '{fullAddress}', isVariable: true },
+                        { label: '{street}', isVariable: true },
+                        { label: '{city}', isVariable: true },
+                        { label: '{state}', isVariable: true },
+                        { label: '{zip}', isVariable: true },
+                      ],
+                    },
+                    {
+                      title: 'Permit Info',
+                      items: [
+                        { label: '{permitType}', isVariable: true },
+                        { label: '{permitNumber}', isVariable: true },
+                        { label: '{permitDate}', isVariable: true },
+                      ],
+                    },
+                  ]}
+                  style={{ marginBottom: spacing.lg }}
+                />
 
                 {selectedTemplate && (
                   <View style={styles.templateInfo}>
@@ -425,6 +453,12 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.md,
+    ...Platform.select({
+      web: {
+        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+      },
+    }),
   },
   header: {
     flexDirection: 'row',

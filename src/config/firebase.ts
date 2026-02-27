@@ -12,7 +12,7 @@ import { firebaseWebConfig } from './firebase.web';
 
 console.log('📌 firebase.ts - Initializing Firebase');
 
-// Initialize Firebase app
+// Initialize Firebase app (use existing if already initialized)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseWebConfig);
 
 // Initialize services

@@ -4,12 +4,15 @@
  */
 
 import React, { useEffect } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
-import { Text, Card, IconButton, useTheme, Button } from 'react-native-paper';
+import { View, StyleSheet, FlatList, Platform } from 'react-native';
+import { Text, Card, IconButton, useTheme, Button, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useNotificationsStore, useAuthStore } from '../../store';
 import { Notification } from '../../types';
-import { spacing } from '../../theme';
+import { spacing, shadows, borderRadius } from '../../theme';
+import WebContainer from '../../components/WebContainer';
+import EmptyState from '../../components/EmptyState';
+import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import {
   subscribeToNotifications,
   toggleNotificationReadStatus,
@@ -68,21 +71,24 @@ export default function NotificationsScreen() {
   };
 
   const renderNotification = ({ item }: { item: Notification }) => (
-    <Card
+    <Surface
       style={[
         styles.card,
-        !item.isRead && { backgroundColor: theme.colors.primaryContainer },
+        {
+          backgroundColor: !item.isRead
+            ? theme.colors.primaryContainer
+            : theme.colors.surface,
+        },
+        shadows.sm,
       ]}
-      mode="elevated"
-      onPress={() => handleToggleReadStatus(item.id, item.isRead)}
     >
-      <Card.Content>
+      <View style={styles.cardContent}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
             {!item.isRead && (
               <Icon name="circle" size={8} color={theme.colors.primary} style={styles.unreadDot} />
             )}
-            <Text variant="titleMedium" style={{ flex: 1 }}>
+            <Text variant="titleMedium" style={{ flex: 1, color: theme.colors.onSurface }}>
               {item.title}
             </Text>
           </View>
@@ -93,45 +99,52 @@ export default function NotificationsScreen() {
           />
         </View>
 
-        <Text variant="bodyMedium" style={styles.body}>
+        <Text variant="bodyMedium" style={[styles.body, { color: theme.colors.onSurfaceVariant }]}>
           {item.body}
         </Text>
 
-        <Text variant="bodySmall" style={{ color: theme.colors.secondary, marginTop: spacing.sm }}>
-          {new Date(item.createdAt).toLocaleString()}
-        </Text>
-      </Card.Content>
-    </Card>
+        <View style={styles.footer}>
+          <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
+            {formatRelativeTime(item.createdAt)}
+          </Text>
+          <Button
+            mode="text"
+            compact
+            onPress={() => handleToggleReadStatus(item.id, item.isRead)}
+          >
+            {item.isRead ? 'Mark unread' : 'Mark read'}
+          </Button>
+        </View>
+      </View>
+    </Surface>
   );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.headerContainer}>
-        <Text variant="headlineSmall">Notifications</Text>
-        {notifications.some((n) => !n.isRead) && (
-          <Button mode="text" onPress={handleMarkAllAsRead}>
-            Mark all read
-          </Button>
-        )}
-      </View>
+      <WebContainer>
+        <View style={styles.headerContainer}>
+          <Text variant="headlineSmall">Notifications</Text>
+          {notifications.some((n) => !n.isRead) && (
+            <Button mode="text" onPress={handleMarkAllAsRead}>
+              Mark all read
+            </Button>
+          )}
+        </View>
 
-      <FlatList
-        data={notifications}
-        renderItem={renderNotification}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="bell-outline" size={64} color={theme.colors.secondary} />
-            <Text variant="titleMedium" style={{ color: theme.colors.secondary, marginTop: spacing.md }}>
-              No notifications
-            </Text>
-            <Text variant="bodyMedium" style={{ color: theme.colors.secondary, marginTop: spacing.sm }}>
-              You're all caught up!
-            </Text>
-          </View>
-        }
-      />
+        <FlatList
+          data={notifications}
+          renderItem={renderNotification}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <EmptyState
+              icon="bell-outline"
+              title="No notifications"
+              description="You're all caught up! We'll notify you when something important happens."
+            />
+          }
+        />
+      </WebContainer>
     </View>
   );
 }
@@ -144,20 +157,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.md,
-    paddingBottom: spacing.sm,
+    padding: spacing.xl,
+    paddingBottom: spacing.md,
   },
   list: {
-    padding: spacing.md,
+    padding: spacing.xl,
     paddingTop: 0,
   },
   card: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    ...Platform.select({
+      web: {
+        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+      },
+    }),
+  },
+  cardContent: {
+    padding: spacing.lg,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: spacing.sm,
   },
   titleRow: {
     flexDirection: 'row',
@@ -168,12 +194,14 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   body: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    lineHeight: 22,
   },
-  emptyContainer: {
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xxl,
-    marginTop: spacing.xxl,
+    marginTop: spacing.sm,
   },
 });

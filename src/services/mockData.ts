@@ -88,7 +88,7 @@ export const MOCK_LEADS: Lead[] = [
     county: 'Santa Clara',
     phone1: '6505551234',
     email1: 'mchen@email.com',
-    permitType: 'bath_permits',
+    permitType: 'kitchen_bath_permits',
     status: 'responded',
     communications: [
       {
@@ -183,7 +183,7 @@ export const MOCK_LEADS: Lead[] = [
     phone1: '+639282647165', // Your actual Philippines number - needs verification in Twilio trial
     phone2: '+12345678900', // Replace with your personal US number or verified number
     email1: 'kimigagamao@gmail.com',
-    permitType: 'kitchen_permits',
+    permitType: 'kitchen_bath_permits',
     status: 'new',
     communications: [],
     viewedBy: [],
@@ -252,7 +252,7 @@ Label App Team`,
   {
     id: 'template-003',
     name: 'Kitchen Welcome Email',
-    permitType: 'kitchen_permits',
+    permitType: 'kitchen_bath_permits',
     category: 'homeowner_email',
     subject: 'Your Kitchen Permit - Renovation Experts Available',
     body: `Hi {firstName},
@@ -282,7 +282,7 @@ Label App Team`,
   {
     id: 'template-004',
     name: 'Bath Renovation Quick SMS',
-    permitType: 'bath_permits',
+    permitType: 'kitchen_bath_permits',
     category: 'homeowner_text',
     subject: null,
     body: 'Hi {firstName}! Saw your bathroom permit at {fullAddress}. Expert bathroom remodelers, 150+ projects. Free quote? Text YES',
@@ -364,21 +364,7 @@ export const MOCK_CURRENT_USER: User = {
       manage_api: false,
       manage_users: false,
     },
-    kitchen_permits: {
-      view: true,
-      create: true,
-      edit: true,
-      delete: false,
-      text: true,
-      email: true,
-      export: true,
-      import: false,
-      reset_password: false,
-      manage_templates: true,
-      manage_api: false,
-      manage_users: false,
-    },
-    bath_permits: {
+    kitchen_bath_permits: {
       view: true,
       create: true,
       edit: true,
