@@ -43,7 +43,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   // Note: We fetch ALL leads and filter locally for better UX (instant filtering)
   useEffect(() => {
     console.log('📡 Setting up Firestore subscription...');
-    const unsubscribe = subscribeToLeads('all', statusFilter, (fetchedLeads) => {
+    const unsubscribe = subscribeToLeads('all', 'all', (fetchedLeads) => {
       console.log(`✅ Received ${fetchedLeads.length} leads from Firestore`);
       setLeads(fetchedLeads);
     });
@@ -52,7 +52,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       console.log('🔌 Cleaning up Firestore subscription');
       unsubscribe();
     };
-  }, [statusFilter, setLeads]);
+  }, [setLeads]);
 
   // Filter leads based on local selectedPermitType, search, and status
   const filteredLeads = React.useMemo(() => {
