@@ -16,6 +16,7 @@ import WebContainer from '../../components/WebContainer';
 import EmptyState from '../../components/EmptyState';
 import { getLeadHealth, getLeadHealthInfo } from '../../utils/leadHealth';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -25,6 +26,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   console.log('📊 DashboardScreen rendering...');
 
   const theme = useTheme();
+  const { isMobile, isTablet, containerPadding } = useResponsive();
   const {
     leads,
     setLeads,
@@ -202,11 +204,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     return leads.filter((lead) => lead.permitType === permitType).length;
   };
 
+  // Responsive permit card width
+  const permitCardWidth = isMobile ? '47%' : isTablet ? '23%' : '22%';
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <WebContainer>
         {/* Permit Type Selector */}
-        <View style={styles.permitTypesContainer}>
+        <View style={[styles.permitTypesContainer, { padding: containerPadding, paddingBottom: spacing.lg }]}>
           {permitTypes.map((permit) => {
             const count = getPermitTypeCount(permit.id);
             const isSelected = selectedPermitType === permit.id;
@@ -216,6 +221,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 style={[
                   styles.permitTypeCard,
                   {
+                    width: permitCardWidth,
                     backgroundColor: isSelected
                       ? theme.colors.primary
                       : theme.colors.surface,
@@ -275,13 +281,13 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           placeholder="Search by name, address, phone, or email..."
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={[styles.searchBar, { backgroundColor: theme.colors.surface }]}
+          style={[styles.searchBar, { backgroundColor: theme.colors.surface, marginHorizontal: containerPadding }]}
           iconColor={theme.colors.primary}
           elevation={1}
         />
 
         {/* Status Filters */}
-        <View style={styles.filters}>
+        <View style={[styles.filters, { paddingHorizontal: containerPadding }]}>
           <Text
             variant="labelMedium"
             style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}
@@ -302,7 +308,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </View>
 
         {/* Lead Count */}
-        <View style={styles.countContainer}>
+        <View style={[styles.countContainer, { paddingHorizontal: containerPadding }]}>
           <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>
             {filteredLeads.length} {filteredLeads.length === 1 ? 'Lead' : 'Leads'}
           </Text>
@@ -313,7 +319,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           data={filteredLeads}
           renderItem={renderLeadCard}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { padding: containerPadding, paddingTop: 0 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -342,13 +348,10 @@ const styles = StyleSheet.create({
   permitTypesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: spacing.xl,
-    paddingBottom: spacing.lg,
     gap: spacing.md,
     justifyContent: 'space-between',
   },
   permitTypeCard: {
-    width: '22%',
     minWidth: 80,
     alignItems: 'center',
     padding: spacing.lg,
@@ -375,14 +378,12 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   searchBar: {
-    marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
     borderRadius: borderRadius.lg,
   },
   filters: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
     paddingBottom: spacing.lg,
     gap: spacing.sm,
     flexWrap: 'wrap',
@@ -395,11 +396,9 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   countContainer: {
-    paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
   },
   list: {
-    padding: spacing.xl,
     paddingTop: 0,
   },
   card: {

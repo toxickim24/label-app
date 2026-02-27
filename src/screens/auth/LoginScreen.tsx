@@ -10,11 +10,13 @@ import Logo from '../../components/Logo';
 import { useAuthStore } from '../../store';
 import { spacing, borderRadius, shadows, typography } from '../../theme';
 import WebContainer from '../../components/WebContainer';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export default function LoginScreen() {
   const theme = useTheme();
   const login = useAuthStore((state) => state.login);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const { isMobile } = useResponsive();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,12 +49,13 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <WebContainer maxWidth="sm">
-          <View style={styles.centerContainer}>
+          <View style={[styles.centerContainer, { paddingHorizontal: isMobile ? spacing.lg : spacing.xl }]}>
             <Surface
               style={[
                 styles.card,
                 {
                   backgroundColor: theme.colors.surface,
+                  padding: isMobile ? spacing.xl : spacing.xxxl,
                 },
                 shadows.md,
               ]}
@@ -180,13 +183,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
   },
   card: {
     width: '100%',
     maxWidth: 440,
     borderRadius: borderRadius.xl,
-    padding: spacing.xxxl,
     ...Platform.select({
       web: {
         borderWidth: 1,

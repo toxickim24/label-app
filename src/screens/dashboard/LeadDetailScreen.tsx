@@ -26,6 +26,8 @@ import { getStatusColor, spacing, borderRadius, shadows } from '../../theme';
 import { Lead, LeadStatus } from '../../types';
 import SendMessageDialog from '../../components/SendMessageDialog';
 import WebContainer from '../../components/WebContainer';
+import { useResponsive } from '../../hooks/useResponsive';
+import EmptyState from '../../components/EmptyState';
 
 interface LeadDetailScreenProps {
   route: {
@@ -48,6 +50,7 @@ const STATUS_OPTIONS: { value: LeadStatus; label: string; icon: string }[] = [
 
 export default function LeadDetailScreen({ route, navigation }: LeadDetailScreenProps) {
   const theme = useTheme();
+  const { isMobile, containerPadding } = useResponsive();
   const { leadId } = route.params;
   const leads = useLeadsStore((state) => state.leads);
   const updateLead = useLeadsStore((state) => state.updateLead);
@@ -260,12 +263,12 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
             <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
               Quick Actions
             </Text>
-            <View style={styles.actionsContainer}>
+            <View style={[styles.actionsContainer, isMobile && styles.actionsContainerMobile]}>
               <Button
                 mode="elevated"
                 icon="phone"
                 onPress={() => handleCall(currentLead.phoneNumbers?.[0] || '')}
-                style={styles.actionButton}
+                style={[styles.actionButton, isMobile && styles.actionButtonMobile]}
                 disabled={!currentLead.phoneNumbers?.[0]}
               >
                 Call
@@ -274,7 +277,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                 mode="elevated"
                 icon="message"
                 onPress={() => handleSMS(currentLead.phoneNumbers?.[0] || '')}
-                style={styles.actionButton}
+                style={[styles.actionButton, isMobile && styles.actionButtonMobile]}
                 disabled={!currentLead.phoneNumbers?.[0]}
               >
                 SMS
@@ -283,7 +286,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                 mode="elevated"
                 icon="email"
                 onPress={() => handleEmail(currentLead.emails?.[0] || '')}
-                style={styles.actionButton}
+                style={[styles.actionButton, isMobile && styles.actionButtonMobile]}
                 disabled={!currentLead.emails?.[0]}
               >
                 Email
@@ -678,9 +681,15 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                 />
               ))
             ) : (
-              <Text variant="bodyMedium" style={{ color: theme.colors.secondary }}>
-                No communications yet
-              </Text>
+              <View style={styles.emptyStateContainer}>
+                <Icon name="email-off-outline" size={48} color={theme.colors.onSurfaceVariant} style={{ opacity: 0.5 }} />
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: spacing.md, textAlign: 'center' }}>
+                  No communications yet
+                </Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: spacing.xs, textAlign: 'center', opacity: 0.7 }}>
+                  Send an SMS or email to start communicating with this lead
+                </Text>
+              </View>
             )}
 
             {currentLead.lastContactedAt && (
@@ -845,8 +854,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
   },
+  actionsContainerMobile: {
+    flexDirection: 'column',
+  },
   actionButton: {
     flex: 1,
+  },
+  actionButtonMobile: {
+    width: '100%',
   },
   contactActions: {
     flexDirection: 'row',
@@ -864,5 +879,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xxxxl,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxxl,
+    paddingHorizontal: spacing.xl,
   },
 });

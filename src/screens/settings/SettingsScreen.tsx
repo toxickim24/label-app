@@ -9,9 +9,11 @@ import { Text, List, Switch, Button, Divider, useTheme, Avatar, Appbar } from 'r
 import { useAuthStore, useThemeStore } from '../../store';
 import { spacing } from '../../theme';
 import WebContainer from '../../components/WebContainer';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const { user, logout } = useAuthStore();
   const { mode, setTheme } = useThemeStore();
 
