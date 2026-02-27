@@ -71,3 +71,5 @@ migrate-*.js
 run-migration.html
 clear-leads.html
 seed-templates.html
+
+/nul
