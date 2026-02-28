@@ -23,6 +23,17 @@ import {
 } from '../../services/templatesService';
 import { getTemplateVariablesGuide, getAITemplateInstruction } from '../../utils/templateVariables';
 
+const PROFESSIONAL_SALES_OPTIMIZATION = `Use consultative selling (help-first, not pushy).
+Sound natural and conversational — not robotic.
+Avoid generic marketing phrases.
+Avoid spammy language.
+Keep it professional but friendly.
+Include one specific, practical expert insight related to the permit type.
+Include one clear but soft call-to-action question.
+Keep sentences short and easy to read.
+Only use the provided dynamic variables.
+Do not invent information.`;
+
 export default function TemplatesScreen() {
   const theme = useTheme();
   const { isMobile, containerPadding } = useResponsive();
@@ -37,6 +48,42 @@ export default function TemplatesScreen() {
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory>('homeowner_email');
   const [customPrompt, setCustomPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Check if selected category should show optimization buttons
+  const shouldShowOptimizationButtons = () => {
+    return ['homeowner_email', 'homeowner_text', 'contractor_email', 'contractor_text'].includes(selectedCategory);
+  };
+
+  // Apply professional sales optimization
+  const handleApplyOptimization = () => {
+    if (customPrompt.trim() === '') {
+      // If empty, fully populate
+      setCustomPrompt(PROFESSIONAL_SALES_OPTIMIZATION);
+    } else {
+      // If has content, append with proper spacing
+      setCustomPrompt(customPrompt + '\n\n' + PROFESSIONAL_SALES_OPTIMIZATION);
+    }
+  };
+
+  // Clear custom instructions
+  const handleClearInstructions = () => {
+    if (customPrompt.trim() !== '') {
+      if (Platform.OS === 'web') {
+        if (window.confirm('Are you sure you want to clear all custom instructions?')) {
+          setCustomPrompt('');
+        }
+      } else {
+        Alert.alert(
+          'Clear Instructions',
+          'Are you sure you want to clear all custom instructions?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Clear', style: 'destructive', onPress: () => setCustomPrompt('') },
+          ]
+        );
+      }
+    }
+  };
 
   // Subscribe to Firestore templates in real-time
   useEffect(() => {
@@ -303,11 +350,35 @@ export default function TemplatesScreen() {
                   value={customPrompt}
                   onChangeText={setCustomPrompt}
                   multiline
-                  numberOfLines={4}
                   mode="outlined"
-                  style={{ marginTop: spacing.md }}
+                  style={{ marginTop: spacing.md, minHeight: 200, maxHeight: 500 }}
                   placeholder="E.g., Make it more formal, include pricing info, etc."
+                  contentStyle={{ paddingTop: 8 }}
                 />
+
+                {/* Optimization Buttons - Only show for specific categories */}
+                {shouldShowOptimizationButtons() && (
+                  <View style={styles.optimizationButtons}>
+                    <Button
+                      mode="contained"
+                      icon="auto-fix"
+                      onPress={handleApplyOptimization}
+                      style={styles.optimizationButton}
+                      contentStyle={styles.optimizationButtonContent}
+                    >
+                      Apply Professional Sales Optimization
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      icon="close-circle-outline"
+                      onPress={handleClearInstructions}
+                      style={styles.clearButton}
+                      disabled={customPrompt.trim() === ''}
+                    >
+                      Clear Instructions
+                    </Button>
+                  </View>
+                )}
               </View>
             </ScrollView>
           </Dialog.ScrollArea>
@@ -514,5 +585,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderLeftWidth: 4,
     borderLeftColor: '#2196f3',
+  },
+  optimizationButtons: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  optimizationButton: {
+    marginBottom: spacing.xs,
+  },
+  optimizationButtonContent: {
+    paddingVertical: spacing.xs,
+  },
+  clearButton: {
+    marginTop: spacing.xs,
   },
 });

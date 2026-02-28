@@ -429,89 +429,248 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
               </>
             ) : (
               <>
-                <List.Item
-                  title="Primary Phone"
-                  description={currentLead.phoneNumbers?.[0] || ''}
-                  left={(props) => <List.Icon {...props} icon="phone" />}
-                  right={(props) => (
-                    <View style={styles.contactActions}>
-                      <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[0] || '')} />
-                      <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[0] || '')} />
-                      <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[0] || '', 'Phone number')} />
+                {/* Primary Phone */}
+                {isMobile ? (
+                  <View style={styles.contactItemMobile}>
+                    <View style={styles.contactInfoRow}>
+                      <Icon name="phone" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
+                      <View style={{ flex: 1 }}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
+                          Primary Phone
+                        </Text>
+                        <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
+                          {currentLead.phoneNumbers?.[0] || ''}
+                        </Text>
+                      </View>
                     </View>
-                  )}
-                />
-
-                {currentLead.phoneNumbers?.[1] && (
+                    <View style={styles.contactActionsMobile}>
+                      <Button mode="outlined" icon="phone" onPress={() => handleCall(currentLead.phoneNumbers?.[0] || '')} style={{ flex: 1 }}>
+                        Call
+                      </Button>
+                      <Button mode="outlined" icon="message" onPress={() => handleSMS(currentLead.phoneNumbers?.[0] || '')} style={{ flex: 1 }}>
+                        SMS
+                      </Button>
+                      <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.phoneNumbers?.[0] || '', 'Phone number')} style={{ flex: 1 }}>
+                        Copy
+                      </Button>
+                    </View>
+                  </View>
+                ) : (
                   <List.Item
-                    title="Secondary Phone"
-                    description={currentLead.phoneNumbers?.[1]}
+                    title="Primary Phone"
+                    description={currentLead.phoneNumbers?.[0] || ''}
                     left={(props) => <List.Icon {...props} icon="phone" />}
                     right={(props) => (
                       <View style={styles.contactActions}>
-                        <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[1]!)} />
-                        <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[1]!)} />
-                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[1]!, 'Phone number')} />
+                        <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[0] || '')} />
+                        <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[0] || '')} />
+                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[0] || '', 'Phone number')} />
                       </View>
                     )}
                   />
                 )}
 
-                {currentLead.phoneNumbers?.[2] && (
-                  <List.Item
-                    title="Tertiary Phone"
-                    description={currentLead.phoneNumbers?.[2]}
-                    left={(props) => <List.Icon {...props} icon="phone" />}
-                    right={(props) => (
-                      <View style={styles.contactActions}>
-                        <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[2]!)} />
-                        <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[2]!)} />
-                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[2]!, 'Phone number')} />
+                {/* Secondary Phone */}
+                {currentLead.phoneNumbers?.[1] && (
+                  isMobile ? (
+                    <View style={styles.contactItemMobile}>
+                      <View style={styles.contactInfoRow}>
+                        <Icon name="phone" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
+                        <View style={{ flex: 1 }}>
+                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
+                            Secondary Phone
+                          </Text>
+                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
+                            {currentLead.phoneNumbers?.[1]}
+                          </Text>
+                        </View>
                       </View>
-                    )}
-                  />
+                      <View style={styles.contactActionsMobile}>
+                        <Button mode="outlined" icon="phone" onPress={() => handleCall(currentLead.phoneNumbers?.[1]!)} style={{ flex: 1 }}>
+                          Call
+                        </Button>
+                        <Button mode="outlined" icon="message" onPress={() => handleSMS(currentLead.phoneNumbers?.[1]!)} style={{ flex: 1 }}>
+                          SMS
+                        </Button>
+                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.phoneNumbers?.[1]!, 'Phone number')} style={{ flex: 1 }}>
+                          Copy
+                        </Button>
+                      </View>
+                    </View>
+                  ) : (
+                    <List.Item
+                      title="Secondary Phone"
+                      description={currentLead.phoneNumbers?.[1]}
+                      left={(props) => <List.Icon {...props} icon="phone" />}
+                      right={(props) => (
+                        <View style={styles.contactActions}>
+                          <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[1]!)} />
+                          <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[1]!)} />
+                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[1]!, 'Phone number')} />
+                        </View>
+                      )}
+                    />
+                  )
+                )}
+
+                {/* Tertiary Phone */}
+                {currentLead.phoneNumbers?.[2] && (
+                  isMobile ? (
+                    <View style={styles.contactItemMobile}>
+                      <View style={styles.contactInfoRow}>
+                        <Icon name="phone" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
+                        <View style={{ flex: 1 }}>
+                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
+                            Tertiary Phone
+                          </Text>
+                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
+                            {currentLead.phoneNumbers?.[2]}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.contactActionsMobile}>
+                        <Button mode="outlined" icon="phone" onPress={() => handleCall(currentLead.phoneNumbers?.[2]!)} style={{ flex: 1 }}>
+                          Call
+                        </Button>
+                        <Button mode="outlined" icon="message" onPress={() => handleSMS(currentLead.phoneNumbers?.[2]!)} style={{ flex: 1 }}>
+                          SMS
+                        </Button>
+                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.phoneNumbers?.[2]!, 'Phone number')} style={{ flex: 1 }}>
+                          Copy
+                        </Button>
+                      </View>
+                    </View>
+                  ) : (
+                    <List.Item
+                      title="Tertiary Phone"
+                      description={currentLead.phoneNumbers?.[2]}
+                      left={(props) => <List.Icon {...props} icon="phone" />}
+                      right={(props) => (
+                        <View style={styles.contactActions}>
+                          <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[2]!)} />
+                          <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[2]!)} />
+                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[2]!, 'Phone number')} />
+                        </View>
+                      )}
+                    />
+                  )
                 )}
 
                 <Divider style={styles.divider} />
 
-                <List.Item
-                  title="Primary Email"
-                  description={currentLead.emails?.[0] || ''}
-                  left={(props) => <List.Icon {...props} icon="email" />}
-                  right={(props) => (
-                    <View style={styles.contactActions}>
-                      <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[0] || '')} />
-                      <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[0] || '', 'Email address')} />
+                {/* Primary Email */}
+                {isMobile ? (
+                  <View style={styles.contactItemMobile}>
+                    <View style={styles.contactInfoRow}>
+                      <Icon name="email" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
+                      <View style={{ flex: 1 }}>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
+                          Primary Email
+                        </Text>
+                        <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
+                          {currentLead.emails?.[0] || ''}
+                        </Text>
+                      </View>
                     </View>
-                  )}
-                />
-
-                {currentLead.emails?.[1] && (
+                    <View style={styles.contactActionsMobile}>
+                      <Button mode="outlined" icon="email" onPress={() => handleEmail(currentLead.emails?.[0] || '')} style={{ flex: 1 }}>
+                        Email
+                      </Button>
+                      <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.emails?.[0] || '', 'Email address')} style={{ flex: 1 }}>
+                        Copy
+                      </Button>
+                    </View>
+                  </View>
+                ) : (
                   <List.Item
-                    title="Secondary Email"
-                    description={currentLead.emails?.[1]}
+                    title="Primary Email"
+                    description={currentLead.emails?.[0] || ''}
                     left={(props) => <List.Icon {...props} icon="email" />}
                     right={(props) => (
                       <View style={styles.contactActions}>
-                        <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[1]!)} />
-                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[1]!, 'Email address')} />
+                        <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[0] || '')} />
+                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[0] || '', 'Email address')} />
                       </View>
                     )}
                   />
                 )}
 
-                {currentLead.emails?.[2] && (
-                  <List.Item
-                    title="Tertiary Email"
-                    description={currentLead.emails?.[2]}
-                    left={(props) => <List.Icon {...props} icon="email" />}
-                    right={(props) => (
-                      <View style={styles.contactActions}>
-                        <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[2]!)} />
-                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[2]!, 'Email address')} />
+                {/* Secondary Email */}
+                {currentLead.emails?.[1] && (
+                  isMobile ? (
+                    <View style={styles.contactItemMobile}>
+                      <View style={styles.contactInfoRow}>
+                        <Icon name="email" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
+                        <View style={{ flex: 1 }}>
+                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
+                            Secondary Email
+                          </Text>
+                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
+                            {currentLead.emails?.[1]}
+                          </Text>
+                        </View>
                       </View>
-                    )}
-                  />
+                      <View style={styles.contactActionsMobile}>
+                        <Button mode="outlined" icon="email" onPress={() => handleEmail(currentLead.emails?.[1]!)} style={{ flex: 1 }}>
+                          Email
+                        </Button>
+                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.emails?.[1]!, 'Email address')} style={{ flex: 1 }}>
+                          Copy
+                        </Button>
+                      </View>
+                    </View>
+                  ) : (
+                    <List.Item
+                      title="Secondary Email"
+                      description={currentLead.emails?.[1]}
+                      left={(props) => <List.Icon {...props} icon="email" />}
+                      right={(props) => (
+                        <View style={styles.contactActions}>
+                          <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[1]!)} />
+                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[1]!, 'Email address')} />
+                        </View>
+                      )}
+                    />
+                  )
+                )}
+
+                {/* Tertiary Email */}
+                {currentLead.emails?.[2] && (
+                  isMobile ? (
+                    <View style={styles.contactItemMobile}>
+                      <View style={styles.contactInfoRow}>
+                        <Icon name="email" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
+                        <View style={{ flex: 1 }}>
+                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
+                            Tertiary Email
+                          </Text>
+                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
+                            {currentLead.emails?.[2]}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.contactActionsMobile}>
+                        <Button mode="outlined" icon="email" onPress={() => handleEmail(currentLead.emails?.[2]!)} style={{ flex: 1 }}>
+                          Email
+                        </Button>
+                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.emails?.[2]!, 'Email address')} style={{ flex: 1 }}>
+                          Copy
+                        </Button>
+                      </View>
+                    </View>
+                  ) : (
+                    <List.Item
+                      title="Tertiary Email"
+                      description={currentLead.emails?.[2]}
+                      left={(props) => <List.Icon {...props} icon="email" />}
+                      right={(props) => (
+                        <View style={styles.contactActions}>
+                          <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[2]!)} />
+                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[2]!, 'Email address')} />
+                        </View>
+                      )}
+                    />
+                  )
                 )}
               </>
             )}
@@ -867,6 +1026,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+  },
+  contactDescription: {
+    flexWrap: 'nowrap',
+    overflow: 'visible',
+  },
+  contactItemMobile: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  contactInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  contactActionsMobile: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginLeft: 40,
   },
   divider: {
     marginVertical: spacing.lg,
