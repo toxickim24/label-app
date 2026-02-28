@@ -625,12 +625,12 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (lead) =>
-          lead.recordId.toLowerCase().includes(query) ||
-          lead.fullName.toLowerCase().includes(query) ||
-          lead.city.toLowerCase().includes(query) ||
-          lead.fullAddress.toLowerCase().includes(query) ||
-          lead.phone1.includes(query) ||
-          lead.email1.toLowerCase().includes(query)
+          lead.recordId?.toLowerCase().includes(query) ||
+          lead.fullName?.toLowerCase().includes(query) ||
+          lead.city?.toLowerCase().includes(query) ||
+          lead.fullAddress?.toLowerCase().includes(query) ||
+          lead.phoneNumbers?.some(phone => String(phone || '').includes(query)) ||
+          lead.emails?.some(email => String(email || '').toLowerCase().includes(query))
       );
     }
 

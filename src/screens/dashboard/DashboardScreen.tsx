@@ -75,12 +75,12 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         lead =>
-          lead.recordId.toLowerCase().includes(query) ||
-          lead.fullName.toLowerCase().includes(query) ||
-          lead.city.toLowerCase().includes(query) ||
-          lead.fullAddress.toLowerCase().includes(query) ||
-          lead.phone1.includes(query) ||
-          lead.email1.toLowerCase().includes(query)
+          lead.recordId?.toLowerCase().includes(query) ||
+          lead.fullName?.toLowerCase().includes(query) ||
+          lead.city?.toLowerCase().includes(query) ||
+          lead.fullAddress?.toLowerCase().includes(query) ||
+          lead.phoneNumbers?.some(phone => String(phone || '').includes(query)) ||
+          lead.emails?.some(email => String(email || '').toLowerCase().includes(query))
       );
     }
 
@@ -103,7 +103,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
     return (
       <TouchableOpacity
-        onPress={() => navigation.navigate('LeadDetail', { leadId: item.id })}
+        onPress={() => {
+          if (item.id) {
+            navigation.navigate('LeadDetail', { leadId: item.id });
+          }
+        }}
         activeOpacity={0.8}
       >
         <Surface
@@ -304,6 +308,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           placeholder={isMobile ? "Search leads..." : "Search by name, address, phone, or email..."}
           onChangeText={setSearchQuery}
           value={searchQuery}
+          onSubmitEditing={(e) => {
+            // Prevent default form submission on web
+            if (Platform.OS === 'web') {
+              e.preventDefault?.();
+            }
+          }}
+          returnKeyType="search"
+          blurOnSubmit={false}
           style={[
             styles.searchBar,
             isMobile && styles.searchBarMobile,

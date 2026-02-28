@@ -51,10 +51,10 @@ const STATUS_OPTIONS: { value: LeadStatus; label: string; icon: string }[] = [
 export default function LeadDetailScreen({ route, navigation }: LeadDetailScreenProps) {
   const theme = useTheme();
   const { isMobile, containerPadding } = useResponsive();
-  const { leadId } = route.params;
+  const { leadId } = route.params || {};
   const leads = useLeadsStore((state) => state.leads);
   const updateLead = useLeadsStore((state) => state.updateLead);
-  const lead = leads.find((l) => l.id === leadId);
+  const lead = leadId ? leads.find((l) => l.id === leadId) : null;
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
