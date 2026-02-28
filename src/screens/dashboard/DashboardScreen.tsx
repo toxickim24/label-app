@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { Text, Card, Chip, Searchbar, useTheme, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useLeadsStore } from '../../store';
@@ -205,106 +205,150 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   };
 
   // Responsive permit card width
-  const permitCardWidth = isMobile ? '47%' : isTablet ? '23%' : '22%';
+  const permitCardWidth = isMobile ? 85 : isTablet ? '23%' : '22%';
+
+  // Render permit type cards
+  const renderPermitTypeCards = () => {
+    const cards = permitTypes.map((permit) => {
+      const count = getPermitTypeCount(permit.id);
+      const isSelected = selectedPermitType === permit.id;
+      return (
+        <TouchableOpacity
+          key={permit.id}
+          style={[
+            styles.permitTypeCard,
+            isMobile && styles.permitTypeCardMobile,
+            {
+              width: permitCardWidth,
+              backgroundColor: isSelected
+                ? theme.colors.primary
+                : theme.colors.surface,
+              borderColor: isSelected ? theme.colors.primary : theme.colors.outline,
+            },
+            isSelected ? shadows.md : shadows.sm,
+          ]}
+          onPress={() => setSelectedPermitType(permit.id as PermitType | 'all')}
+          activeOpacity={0.8}
+        >
+          {/* Count Badge */}
+          <View
+            style={[
+              styles.countBadge,
+              isMobile && styles.countBadgeMobile,
+              {
+                backgroundColor: isSelected
+                  ? 'rgba(255, 255, 255, 0.95)'
+                  : theme.colors.primaryContainer,
+              },
+            ]}
+          >
+            <Text
+              variant="labelSmall"
+              style={{
+                color: isSelected
+                  ? theme.colors.primary
+                  : theme.colors.onPrimaryContainer,
+                fontWeight: '700',
+                fontSize: isMobile ? 9 : undefined,
+              }}
+            >
+              {count}
+            </Text>
+          </View>
+          <Icon
+            name={permit.icon}
+            size={isMobile ? 22 : 32}
+            color={isSelected ? '#FFFFFF' : theme.colors.primary}
+          />
+          <Text
+            variant={isMobile ? 'labelSmall' : 'labelMedium'}
+            style={{
+              color: isSelected ? '#FFFFFF' : theme.colors.onSurface,
+              marginTop: isMobile ? 4 : spacing.sm,
+              textAlign: 'center',
+              fontWeight: '600',
+              fontSize: isMobile ? 10 : undefined,
+              lineHeight: isMobile ? 12 : undefined,
+            }}
+          >
+            {permit.label}
+          </Text>
+        </TouchableOpacity>
+      );
+    });
+
+    return cards;
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <WebContainer>
         {/* Permit Type Selector */}
-        <View style={[styles.permitTypesContainer, { padding: containerPadding, paddingBottom: spacing.lg }]}>
-          {permitTypes.map((permit) => {
-            const count = getPermitTypeCount(permit.id);
-            const isSelected = selectedPermitType === permit.id;
-            return (
-              <TouchableOpacity
-                key={permit.id}
-                style={[
-                  styles.permitTypeCard,
-                  {
-                    width: permitCardWidth,
-                    backgroundColor: isSelected
-                      ? theme.colors.primary
-                      : theme.colors.surface,
-                    borderColor: isSelected ? theme.colors.primary : theme.colors.outline,
-                  },
-                  isSelected ? shadows.md : shadows.sm,
-                ]}
-                onPress={() => setSelectedPermitType(permit.id as PermitType | 'all')}
-                activeOpacity={0.8}
-              >
-                {/* Count Badge */}
-                <View
-                  style={[
-                    styles.countBadge,
-                    {
-                      backgroundColor: isSelected
-                        ? 'rgba(255, 255, 255, 0.95)'
-                        : theme.colors.primaryContainer,
-                    },
-                  ]}
-                >
-                  <Text
-                    variant="labelMedium"
-                    style={{
-                      color: isSelected
-                        ? theme.colors.primary
-                        : theme.colors.onPrimaryContainer,
-                      fontWeight: '700',
-                    }}
-                  >
-                    {count}
-                  </Text>
-                </View>
-                <Icon
-                  name={permit.icon}
-                  size={32}
-                  color={isSelected ? '#FFFFFF' : theme.colors.primary}
-                />
-                <Text
-                  variant="labelMedium"
-                  style={{
-                    color: isSelected ? '#FFFFFF' : theme.colors.onSurface,
-                    marginTop: spacing.sm,
-                    textAlign: 'center',
-                    fontWeight: '600',
-                  }}
-                >
-                  {permit.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {isMobile ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.permitTypesScrollContainer, { paddingHorizontal: containerPadding }]}
+            style={styles.permitTypesScrollView}
+          >
+            {renderPermitTypeCards()}
+          </ScrollView>
+        ) : (
+          <View style={[styles.permitTypesContainer, { padding: containerPadding, paddingBottom: spacing.lg }]}>
+            {renderPermitTypeCards()}
+          </View>
+        )}
 
         {/* Search Bar */}
         <Searchbar
-          placeholder="Search by name, address, phone, or email..."
+          placeholder={isMobile ? "Search leads..." : "Search by name, address, phone, or email..."}
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={[styles.searchBar, { backgroundColor: theme.colors.surface, marginHorizontal: containerPadding }]}
+          style={[
+            styles.searchBar,
+            isMobile && styles.searchBarMobile,
+            {
+              backgroundColor: theme.colors.surface,
+              marginHorizontal: containerPadding,
+              marginBottom: isMobile ? spacing.sm : spacing.lg,
+            },
+          ]}
           iconColor={theme.colors.primary}
           elevation={1}
+          inputStyle={isMobile ? styles.searchInputMobile : undefined}
         />
 
         {/* Status Filters */}
-        <View style={[styles.filters, { paddingHorizontal: containerPadding }]}>
-          <Text
-            variant="labelMedium"
-            style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}
-          >
-            Status:
-          </Text>
-          {statusFilters.map((status) => (
-            <Chip
-              key={status}
-              selected={statusFilter === status}
-              onPress={() => setStatusFilter(status)}
-              style={styles.filterChip}
-              mode={statusFilter === status ? 'flat' : 'outlined'}
+        <View style={[styles.filtersContainer, { paddingHorizontal: isMobile ? 0 : containerPadding }]}>
+          {!isMobile && (
+            <Text
+              variant="labelMedium"
+              style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-            </Chip>
-          ))}
+              Status:
+            </Text>
+          )}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.filters,
+              isMobile && { paddingHorizontal: containerPadding },
+            ]}
+          >
+            {statusFilters.map((status) => (
+              <Chip
+                key={status}
+                selected={statusFilter === status}
+                onPress={() => setStatusFilter(status)}
+                style={styles.filterChip}
+                mode={statusFilter === status ? 'flat' : 'outlined'}
+                compact={isMobile}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </Chip>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Lead Count */}
@@ -351,6 +395,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     justifyContent: 'space-between',
   },
+  permitTypesScrollContainer: {
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  permitTypesScrollView: {
+    paddingVertical: spacing.sm,
+    flexShrink: 0,
+  },
   permitTypeCard: {
     minWidth: 80,
     alignItems: 'center',
@@ -365,6 +417,14 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  permitTypeCardMobile: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    minWidth: 80,
+    maxWidth: 85,
+    minHeight: 70,
+    justifyContent: 'center',
+  },
   countBadge: {
     position: 'absolute',
     top: spacing.sm,
@@ -377,16 +437,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     zIndex: 1,
   },
+  countBadgeMobile: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    top: 4,
+    right: 4,
+  },
   searchBar: {
-    marginBottom: spacing.lg,
     borderRadius: borderRadius.lg,
+  },
+  searchBarMobile: {
+    height: 40,
+    borderRadius: borderRadius.md,
+  },
+  searchInputMobile: {
+    fontSize: 14,
+    minHeight: 0,
+  },
+  filtersContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: spacing.md,
   },
   filters: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: spacing.lg,
     gap: spacing.sm,
-    flexWrap: 'wrap',
   },
   filterLabel: {
     marginRight: spacing.sm,
