@@ -47,6 +47,7 @@ test-twilio.js
 # Firebase config files (contain sensitive project info)
 android/app/google-services.json
 ios/GoogleService-Info.plist
+serviceAccountKey.json
 
 # typescript
 *.tsbuildinfo
