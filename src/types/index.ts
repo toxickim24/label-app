@@ -124,6 +124,7 @@ export interface Lead {
   isRead: boolean;
   isFlagged: boolean;
   notes: string[];  // Array of notes
+  description?: string;  // Lead description
 }
 
 // ============================================================================

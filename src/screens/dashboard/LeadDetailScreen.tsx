@@ -863,6 +863,39 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
             )}
           </Surface>
 
+          {/* Description */}
+          <Surface
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.colors.surface,
+                borderWidth: 1,
+                borderColor: theme.colors.outline + '20',
+              },
+              shadows.sm,
+            ]}
+          >
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+              Description
+            </Text>
+            {isEditing ? (
+              <TextInput
+                value={editedLead?.description}
+                onChangeText={(text) => updateField('description', text)}
+                mode="outlined"
+                multiline
+                numberOfLines={4}
+                placeholder="Enter description..."
+                style={styles.input}
+                left={<TextInput.Icon icon="text-box" />}
+              />
+            ) : (
+              <Text variant="bodyMedium" style={{ marginTop: spacing.sm, color: theme.colors.onSurfaceVariant }}>
+                {currentLead.description || 'No description'}
+              </Text>
+            )}
+          </Surface>
+
           {/* Notes */}
           <Surface
             style={[
