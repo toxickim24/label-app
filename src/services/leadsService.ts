@@ -45,7 +45,7 @@ function convertTimestamp(timestamp: any): Date {
  * Convert Firestore document to Lead object
  */
 function convertFirestoreToLead(id: string, data: any): Lead {
-  return {
+  const lead = {
     id,
     // Basic Info
     permitNumber: data.permitNumber || '',
@@ -53,12 +53,12 @@ function convertFirestoreToLead(id: string, data: any): Lead {
     lastName: data.lastName || '',
     fullName: data.fullName || '',
 
-    // Contact Info
-    phoneNumbers: data.phoneNumbers || [],
-    phoneNumber: data.phoneNumber || '',
-    phone1: data.phoneNumber || data.phoneNumbers?.[0] || '',
-    phone2: data.phoneNumbers?.[1] || '',
-    phone3: data.phoneNumbers?.[2] || '',
+    // Contact Info (convert phone numbers to strings since they may be stored as numbers in Firebase)
+    phoneNumbers: (data.phoneNumbers || []).map((p: any) => String(p)),
+    phoneNumber: String(data.phoneNumber || ''),
+    phone1: String(data.phoneNumber || data.phoneNumbers?.[0] || ''),
+    phone2: String(data.phoneNumbers?.[1] || ''),
+    phone3: String(data.phoneNumbers?.[2] || ''),
     emails: data.emails || [],
     email: data.email || '',
     email1: data.email || data.emails?.[0] || '',
@@ -91,15 +91,26 @@ function convertFirestoreToLead(id: string, data: any): Lead {
     lastUpdated: data.lastUpdated ? convertTimestamp(data.lastUpdated) : new Date(),
 
     // Arrays
-    notes: data.notes || [],
     tags: data.tags || [],
     communications: data.communications || [],
+
+    // Text fields
+    notes: data.notes || '',
+    description: data.description || '',
 
     // Contact tracking
     lastContactedAt: data.lastContactedAt ? convertTimestamp(data.lastContactedAt) : null,
     lastContactedBy: data.lastContactedBy || null,
     contactedCount: data.contactedCount || 0,
+
+    // Flags
+    isRead: data.isRead || false,
+    isFlagged: data.isFlagged || false,
+    viewedBy: data.viewedBy || [],
+    importedBy: data.importedBy || null,
   };
+
+  return lead;
 }
 
 /**
@@ -136,7 +147,20 @@ export function subscribeToLeads(
   const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      const leads = snapshot.docs.map((doc) => convertFirestoreToLead(doc.id, doc.data()));
+      const leads = snapshot.docs.map((doc, index) => {
+        const lead = convertFirestoreToLead(doc.id, doc.data());
+        // Log first lead for debugging
+        if (index === 0) {
+          console.log('📋 First lead DETAILED:', {
+            id: lead.id,
+            description: lead.description,
+            notes: lead.notes,
+            permitNumber: lead.permitNumber,
+            fullName: lead.fullName,
+          });
+        }
+        return lead;
+      });
       console.log(`✅ Loaded ${leads.length} leads from Firestore`);
       callback(leads);
     },

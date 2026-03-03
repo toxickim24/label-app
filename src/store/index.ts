@@ -349,10 +349,14 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
           county: data.county || '',
           // Handle zipCode field (map from 'zip' if 'zipCode' doesn't exist)
           zipCode: data.zipCode || data.zip || '',
-          // Handle phoneNumbers array (map from phoneNumber if doesn't exist)
-          phoneNumbers: data.phoneNumbers || (data.phoneNumber ? [data.phoneNumber] : []),
+          // Handle phoneNumbers array (map from phoneNumber if doesn't exist, convert numbers to strings)
+          phoneNumbers: (data.phoneNumbers || (data.phoneNumber ? [data.phoneNumber] : [])).map((p: any) => String(p)),
           // Handle emails array (map from email if doesn't exist)
           emails: data.emails || (data.email ? [data.email] : []),
+          // Handle description field - ensure it's always set
+          description: data.description || '',
+          // Handle notes field - ensure it's the right type
+          notes: data.notes || '',
           // Timestamps
           createdDate: data.createdDate instanceof Timestamp ? data.createdDate.toDate() : new Date(),
           lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(),
@@ -396,19 +400,24 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
             county: data.county || '',
             // Handle zipCode field (map from 'zip' if 'zipCode' doesn't exist)
             zipCode: data.zipCode || data.zip || '',
-            // Handle phoneNumbers array (map from phoneNumber if doesn't exist)
-            phoneNumbers: data.phoneNumbers || (data.phoneNumber ? [data.phoneNumber] : []),
+            // Handle phoneNumbers array (map from phoneNumber if doesn't exist, convert numbers to strings)
+            phoneNumbers: (data.phoneNumbers || (data.phoneNumber ? [data.phoneNumber] : [])).map((p: any) => String(p)),
             // Handle emails array (map from email if doesn't exist)
             emails: data.emails || (data.email ? [data.email] : []),
+            // Handle description field - ensure it's always set
+            description: data.description || '',
+            // Handle notes field - ensure it's the right type
+            notes: data.notes || '',
             // Timestamps
             createdDate: data.createdDate instanceof Timestamp ? data.createdDate.toDate() : new Date(),
             lastUpdated: data.lastUpdated instanceof Timestamp ? data.lastUpdated.toDate() : new Date(),
             lastContactedAt: data.lastContactedAt instanceof Timestamp ? data.lastContactedAt.toDate() : null,
           };
 
-          // Debug first lead
+          // Debug first lead - DETAILED
           if (docSnap.id === snapshot.docs[0]?.id) {
-            console.log('📋 First lead loaded:', {
+            console.log('📋 First lead loaded - DETAILED DEBUG:', {
+              docId: docSnap.id,
               countyFromDB: data.county,
               countyInLead: lead.county,
               zipCode: lead.zipCode,
@@ -416,7 +425,14 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
               zipCodeFromDB: data.zipCode,
               phoneNumbers: lead.phoneNumbers,
               emails: lead.emails,
+              description: lead.description,
+              descriptionFromDB: data.description,
+              descriptionType: typeof data.description,
+              descriptionValue: JSON.stringify(data.description),
+              notes: lead.notes,
+              notesFromDB: data.notes,
               allDataKeys: Object.keys(data).join(', '),
+              fullRawData: JSON.stringify(data, null, 2),
             });
           }
 
@@ -516,8 +532,9 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
             return;
           }
 
-          // Skip empty strings
-          if (value === '') {
+          // Allow empty strings for notes and description (so they can be cleared)
+          // Skip empty strings for other fields
+          if (value === '' && key !== 'notes' && key !== 'description') {
             return;
           }
 
