@@ -48,6 +48,7 @@ test-twilio.js
 android/app/google-services.json
 ios/GoogleService-Info.plist
 serviceAccountKey.json
+serviceAccountKey.json.json
 
 # typescript
 *.tsbuildinfo
