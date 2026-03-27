@@ -49,7 +49,7 @@ Complete technical documentation for building and deploying the **Label** mobile
 
 ## 📚 Documentation Index
 
-This package contains 9 comprehensive guides covering every aspect of the Label application:
+This package contains 10 comprehensive guides covering every aspect of the Label application:
 
 ### 🔥 Firebase Getting Started Guides
 
@@ -181,8 +181,20 @@ This package contains 9 comprehensive guides covering every aspect of the Label 
 
 **Step-by-step API configuration.**
 
-### 7. [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
-**Build and Deployment Instructions**
+### 7. [PUBLISHING_TO_APP_STORES.md](./PUBLISHING_TO_APP_STORES.md) ⭐ NEW!
+**Simplified Publishing Guide for Beginners**
+- Step-by-step guide in plain English
+- Publishing to Google Play Store (Android)
+- Publishing to Apple App Store (iOS)
+- No technical jargon - just simple instructions
+- Common questions and answers
+- What happens after publishing
+- Quick command reference
+
+**Start here if you want to publish your app to the stores!**
+
+### 8. [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+**Complete Technical Deployment Guide**
 - Development environment setup
 - Project initialization
 - Logo integration (Android & iOS)
@@ -195,9 +207,9 @@ This package contains 9 comprehensive guides covering every aspect of the Label 
 - CI/CD with GitHub Actions
 - Production checklist
 
-**Complete deployment workflow.**
+**For developers who want full technical details.**
 
-### 8. [MVP_ROADMAP.md](./MVP_ROADMAP.md)
+### 9. [MVP_ROADMAP.md](./MVP_ROADMAP.md)
 **Development Roadmap & Timeline**
 - 3-phase implementation plan
 - Sprint breakdown (12-16 weeks)
@@ -221,7 +233,7 @@ This package contains 9 comprehensive guides covering every aspect of the Label 
 2. **Read Architecture**: Review `LABEL_APP_ARCHITECTURE.md`
 3. **Set Up APIs**: Follow `API_INTEGRATION_GUIDE.md`
 4. **Deploy Backend**: Use `CLOUD_FUNCTIONS.md` and `SECURITY_RULES.md`
-5. **Build Mobile App**: Follow `DEPLOYMENT_GUIDE.md`
+5. **Build Mobile App**: Follow `DEPLOYMENT_GUIDE.md` (technical) or `PUBLISHING_TO_APP_STORES.md` (simplified)
 6. **Test**: Comprehensive testing per each guide
 
 ### For Administrators
@@ -503,12 +515,12 @@ This is production documentation for the Label application. For updates:
 
 ## 📊 Documentation Statistics
 
-- **Total Pages**: 9 comprehensive guides
-- **Total Words**: ~60,000 words
-- **Code Examples**: 150+ snippets
+- **Total Pages**: 10 comprehensive guides
+- **Total Words**: ~65,000+ words
+- **Code Examples**: 160+ snippets
 - **Diagrams**: 10+ ASCII/text diagrams
-- **Tables**: 60+ reference tables
-- **Checklists**: 25+ implementation checklists
+- **Tables**: 65+ reference tables
+- **Checklists**: 30+ implementation checklists
 
 ---
 
@@ -518,7 +530,7 @@ This is production documentation for the Label application. For updates:
 2. **Understand Architecture**: `LABEL_APP_ARCHITECTURE.md`
 3. **Set Up Backend**: `CLOUD_FUNCTIONS.md` + `SECURITY_RULES.md`
 4. **Configure APIs**: `API_INTEGRATION_GUIDE.md`
-5. **Build Mobile App**: `DEPLOYMENT_GUIDE.md`
+5. **Publish to App Stores**: `PUBLISHING_TO_APP_STORES.md` (beginners) or `DEPLOYMENT_GUIDE.md` (technical)
 6. **Reference Firebase Code**: `FIREBASE_QUICK_REFERENCE.md` (while coding)
 7. **Follow Roadmap**: `MVP_ROADMAP.md`
 8. **Train Users**: `USER_GUIDE.md` + `MASTER_ADMIN_GUIDE.md`
@@ -537,13 +549,20 @@ For additional support during development, consult:
 
 ---
 
-**Version**: 1.1.0
-**Last Updated**: February 2026
+**Version**: 1.2.0
+**Last Updated**: March 2026
 **Status**: Production Ready ✅
 
 ---
 
 ## Document Change Log
+
+**v1.2.0 (March 2026)**
+- Added simplified app store publishing guide
+- `PUBLISHING_TO_APP_STORES.md` - Beginner-friendly publishing guide in plain English
+- Step-by-step instructions for Google Play Store and Apple App Store
+- Updated documentation index and quick start
+- Total: 10 comprehensive guides
 
 **v1.1.0 (February 2026)**
 - Added Firebase beginner guides
