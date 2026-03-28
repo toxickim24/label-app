@@ -31,12 +31,34 @@ export default function MainTabs() {
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.outline,
+          borderTopColor: theme.dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+          borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginTop: 4,
+        },
+        tabBarIconStyle: {
+          marginTop: 4,
         },
         headerStyle: {
           backgroundColor: theme.colors.surface,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
         },
         headerTintColor: theme.colors.onSurface,
+        headerTitleStyle: {
+          fontWeight: '700',
+          fontSize: 18,
+        },
       }}
     >
       <Tab.Screen

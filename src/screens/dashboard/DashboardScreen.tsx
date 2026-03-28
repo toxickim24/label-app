@@ -155,23 +155,34 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           </Chip>
         </View>
 
-        <Text variant="titleMedium" style={[styles.name, { color: theme.colors.onSurface }]}>
+        <Text
+          variant="titleLarge"
+          style={[styles.name, { color: theme.colors.onSurface }]}
+          numberOfLines={1}
+        >
           {item.fullName}
         </Text>
 
         <View style={styles.addressRow}>
-          <Icon name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+          <Icon name="map-marker" size={18} color={theme.colors.onSurfaceVariant} />
           <Text
             variant="bodyMedium"
             style={[styles.address, { color: theme.colors.onSurfaceVariant }]}
+            numberOfLines={2}
           >
             {item.fullAddress}
           </Text>
         </View>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, theme.dark && { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
           <View style={styles.footerLeft}>
-            <View style={styles.footerBadge}>
+            <View style={[
+              styles.footerBadge,
+              theme.dark && {
+                backgroundColor: 'rgba(10, 132, 255, 0.12)',
+                borderColor: 'rgba(10, 132, 255, 0.2)',
+              },
+            ]}>
               <Text
                 variant="labelSmall"
                 style={[styles.footerBadgeText, { color: theme.colors.primary }]}
@@ -181,7 +192,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             </View>
           </View>
           <View style={styles.footerRight}>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            <Icon name="clock-outline" size={14} color={theme.colors.onSurfaceVariant} style={{ marginRight: 4 }} />
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 13 }}>
               {formatRelativeTime(lastActivityDate)}
             </Text>
           </View>
@@ -365,9 +377,29 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
         {/* Lead Count */}
         <View style={[styles.countContainer, { paddingHorizontal: containerPadding }]}>
-          <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>
+          <Text
+            variant="titleMedium"
+            style={{
+              color: theme.colors.onSurface,
+              fontWeight: '700',
+              fontSize: 17,
+              letterSpacing: -0.3,
+            }}
+          >
             {filteredLeads.length} {filteredLeads.length === 1 ? 'Lead' : 'Leads'}
           </Text>
+          {searchQuery || statusFilter !== 'all' || selectedPermitType !== 'all' ? (
+            <Text
+              variant="bodySmall"
+              style={{
+                color: theme.colors.onSurfaceVariant,
+                marginTop: spacing.xs,
+                fontSize: 13,
+              }}
+            >
+              Filtered from {leads.length} total
+            </Text>
+          ) : null}
         </View>
 
         {/* Leads List */}
@@ -408,70 +440,76 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   permitTypesScrollContainer: {
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
+    gap: spacing.md,           // Increased from sm to md
+    paddingVertical: spacing.md, // Increased padding
   },
   permitTypesScrollView: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     flexShrink: 0,
   },
   permitTypeCard: {
-    minWidth: 80,
+    minWidth: 90,              // Slightly larger
     alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1.5,
+    padding: spacing.xl,        // More generous padding
+    borderRadius: borderRadius.xl, // More rounded
+    borderWidth: 2,             // Thicker border for prominence
     position: 'relative',
     ...Platform.select({
       web: {
-        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
         cursor: 'pointer',
+        ':hover': {
+          transform: 'translateY(-2px)',
+        },
       },
     }),
   },
   permitTypeCardMobile: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    minWidth: 80,
-    maxWidth: 85,
-    minHeight: 70,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    minWidth: 85,
+    maxWidth: 90,
+    minHeight: 80,
     justifyContent: 'center',
   },
   countBadge: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
+    minWidth: 28,              // Slightly larger
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     zIndex: 1,
+    ...shadows.sm,             // Add subtle shadow
   },
   countBadgeMobile: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     paddingHorizontal: 4,
-    top: 4,
-    right: 4,
+    top: 6,
+    right: 6,
   },
   searchBar: {
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl, // More rounded
+    elevation: 2,               // Slight elevation
   },
   searchBarMobile: {
-    height: 40,
-    borderRadius: borderRadius.md,
+    height: 44,                 // Larger touch target
+    borderRadius: borderRadius.lg,
   },
   searchInputMobile: {
-    fontSize: 14,
+    fontSize: 15,               // Slightly larger
     minHeight: 0,
   },
   filtersContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,   // More breathing room
+    paddingTop: spacing.xs,
   },
   filters: {
     flexDirection: 'row',
@@ -479,28 +517,32 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   filterLabel: {
-    marginRight: spacing.sm,
+    marginRight: spacing.md,     // More space
     fontWeight: '600',
+    fontSize: 15,                // Slightly larger
   },
   filterChip: {
     marginRight: spacing.sm,
   },
   countContainer: {
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,   // More breathing room
   },
   list: {
     paddingTop: 0,
   },
   card: {
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    marginBottom: spacing.xl,    // More space between cards
+    borderRadius: borderRadius.xl, // More rounded for premium feel
+    padding: spacing.xl,          // More generous padding
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: 'rgba(0,0,0,0.06)',
     ...Platform.select({
       web: {
-        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
         cursor: 'pointer',
+        ':hover': {
+          transform: 'translateY(-1px)',
+        },
       },
     }),
   },
@@ -508,7 +550,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,    // More space
   },
   cardHeaderLeft: {
     flexDirection: 'row',
@@ -516,45 +558,60 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardIcon: {
-    marginRight: spacing.sm,
+    marginRight: spacing.md,     // More space
   },
   recordId: {
     fontWeight: '600',
+    fontSize: 13,                // Explicit font size
+    letterSpacing: 0.5,          // Better readability
+    textTransform: 'uppercase',
   },
   name: {
     marginBottom: spacing.md,
-    fontWeight: '600',
+    fontWeight: '700',           // Bolder
+    fontSize: 18,                // Larger, more prominent
+    lineHeight: 24,
   },
   addressRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
+    marginBottom: spacing.xl,    // More space
+    gap: spacing.md,             // Larger gap
   },
   address: {
     flex: 1,
-    lineHeight: 20,
+    lineHeight: 22,              // Better readability
+    fontSize: 15,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: spacing.md,      // Add top padding
+    borderTopWidth: 1,           // Add subtle divider
+    borderTopColor: 'rgba(0,0,0,0.04)',
   },
   footerLeft: {
     flex: 1,
   },
   footerRight: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   footerBadge: {
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    backgroundColor: 'rgba(0, 122, 255, 0.08)',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.12)',
   },
   footerBadgeText: {
-    fontWeight: '600',
-    fontSize: 11,
+    fontWeight: '700',           // Bolder
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
 });

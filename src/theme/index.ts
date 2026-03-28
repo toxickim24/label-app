@@ -59,6 +59,8 @@ export const borderRadius = {
   md: 8,
   lg: 12,
   xl: 16,
+  xxl: 20,
+  xxxl: 24,
   round: 999,
 };
 
@@ -251,6 +253,93 @@ export const components = {
   emptyState: {
     padding: spacing.xxxxl,
     maxWidth: 400,
+  },
+};
+
+/**
+ * Interactive State Styles
+ * For hover, focus, pressed, disabled states
+ */
+export const interactiveStates = {
+  hover: {
+    light: {
+      opacity: 0.08,
+      backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    },
+    dark: {
+      opacity: 0.12,
+      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    },
+  },
+  pressed: {
+    light: {
+      opacity: 0.12,
+      backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    },
+    dark: {
+      opacity: 0.16,
+      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    },
+  },
+  focus: {
+    light: {
+      borderColor: '#007AFF',
+      borderWidth: 2,
+      shadowColor: '#007AFF',
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    },
+    dark: {
+      borderColor: '#0A84FF',
+      borderWidth: 2,
+      shadowColor: '#0A84FF',
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+    },
+  },
+  disabled: {
+    opacity: 0.4,
+  },
+};
+
+/**
+ * Utility Styles for Common Patterns
+ */
+export const utils = {
+  // Flexbox utilities
+  flexCenter: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flexBetween: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  flexStart: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+
+  // Text utilities
+  textCenter: {
+    textAlign: 'center' as const,
+  },
+  textBold: {
+    fontWeight: '700' as const,
+  },
+  textSemiBold: {
+    fontWeight: '600' as const,
+  },
+
+  // Spacing utilities
+  fullWidth: {
+    width: '100%',
+  },
+  fullHeight: {
+    height: '100%',
   },
 };
 

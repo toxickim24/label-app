@@ -178,6 +178,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     paddingVertical: spacing.xxxxl,
+    minHeight: '100%',
   },
   centerContainer: {
     flex: 1,
@@ -186,68 +187,84 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 440,
-    borderRadius: borderRadius.xl,
+    maxWidth: 460,                     // Slightly wider
+    borderRadius: borderRadius.xxl,    // More rounded (need to add to theme)
     ...Platform.select({
       web: {
         borderWidth: 1,
-        borderColor: 'rgba(0, 0, 0, 0.06)',
+        borderColor: 'rgba(0, 0, 0, 0.08)',
       },
     }),
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,         // More space
   },
   logoContainer: {
     marginBottom: spacing.xl,
+    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    backgroundColor: 'rgba(0, 122, 255, 0.06)',
   },
   title: {
     textAlign: 'center',
     fontWeight: '700',
     marginBottom: spacing.md,
+    fontSize: 32,
+    letterSpacing: -0.5,
   },
   subtitle: {
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
+    fontSize: 16,
+    opacity: 0.8,
   },
   divider: {
-    marginVertical: spacing.xl,
+    marginVertical: spacing.xxl,       // More space
   },
   form: {
     marginBottom: spacing.xl,
+    gap: spacing.lg,                   // Add gap between inputs
   },
   input: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: 'transparent',     // Transparent background for cleaner look
   },
   errorContainer: {
-    backgroundColor: 'rgba(255, 59, 48, 0.08)',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: 'rgba(255, 59, 48, 0.10)',
+    borderRadius: borderRadius.lg,     // More rounded
+    padding: spacing.lg,               // More padding
     marginBottom: spacing.lg,
+    borderLeftWidth: 4,                // Accent border
+    borderLeftColor: '#FF3B30',
   },
   error: {
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',                 // Slightly bolder
+    fontSize: 14,
   },
   button: {
-    marginTop: spacing.md,
+    marginTop: spacing.lg,             // More space
     marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,     // More rounded
+    elevation: 0,                       // Remove shadow for cleaner look
   },
   buttonContent: {
-    height: 48,
-    paddingHorizontal: spacing.xl,
+    height: 52,                         // Taller for better touch target
+    paddingHorizontal: spacing.xxl,
   },
   forgotButton: {
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   footer: {
     alignItems: 'center',
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xl,            // More space
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 13,
+    opacity: 0.6,
+    lineHeight: 18,
   },
 });

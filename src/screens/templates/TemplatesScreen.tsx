@@ -242,41 +242,79 @@ export default function TemplatesScreen() {
 
   const renderTemplate = ({ item }: { item: Template }) => (
     <TouchableOpacity onPress={() => handleTemplateClick(item)} activeOpacity={0.7}>
-      <Card style={styles.card} mode="elevated">
+      <Card style={styles.card} mode="elevated" elevation={2}>
         <Card.Content>
           <View style={styles.header}>
-            <Text variant="titleMedium">{item.name}</Text>
+            <Text
+              variant="titleLarge"
+              style={{
+                flex: 1,
+                fontWeight: '700',
+                fontSize: 17,
+                lineHeight: 24,
+                color: theme.colors.onSurface,
+              }}
+              numberOfLines={2}
+            >
+              {item.name}
+            </Text>
             <Chip
               mode="flat"
-              style={{ backgroundColor: theme.colors.primaryContainer }}
-              icon={() => <Icon name="robot" size={16} color={theme.colors.onPrimaryContainer} />}
+              style={{
+                backgroundColor: theme.dark
+                  ? 'rgba(10, 132, 255, 0.15)'
+                  : theme.colors.primaryContainer,
+                height: 28,
+              }}
+              textStyle={{
+                fontSize: 11,
+                fontWeight: '700',
+                letterSpacing: 0.5,
+              }}
+              icon={() => (
+                <Icon
+                  name="robot"
+                  size={14}
+                  color={theme.dark ? theme.colors.primary : theme.colors.onPrimaryContainer}
+                />
+              )}
             >
               {item.generatedBy.toUpperCase()}
             </Chip>
           </View>
 
-          <Text variant="bodyMedium" style={styles.category}>
-            {item.category.replace('_', ' ').toUpperCase()}
+          <Text variant="labelSmall" style={[styles.category, { color: theme.colors.onSurfaceVariant }]}>
+            {item.category.replace(/_/g, ' ')}
           </Text>
 
           {item.subject && (
-            <Text variant="bodySmall" style={styles.subject}>
-              Subject: {item.subject}
+            <Text variant="titleSmall" style={[styles.subject, { color: theme.colors.onSurface }]} numberOfLines={2}>
+              {item.subject}
             </Text>
           )}
 
-          <Text variant="bodySmall" numberOfLines={2} style={styles.body}>
+          <Text
+            variant="bodyMedium"
+            numberOfLines={3}
+            style={[styles.body, { color: theme.colors.onSurfaceVariant }]}
+          >
             {item.body}
           </Text>
 
-          <View style={styles.footer}>
-            <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
-              Used {item.timesUsed} times
-            </Text>
-            {item.lastUsedAt && (
-              <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
-                Last: {new Date(item.lastUsedAt).toLocaleDateString()}
+          <View style={[styles.footer, theme.dark && { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Icon name="chart-line" size={14} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+                Used {item.timesUsed} {item.timesUsed === 1 ? 'time' : 'times'}
               </Text>
+            </View>
+            {item.lastUsedAt && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Icon name="clock-outline" size={14} color={theme.colors.onSurfaceVariant} />
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+                  {new Date(item.lastUsedAt).toLocaleDateString()}
+                </Text>
+              </View>
             )}
           </View>
         </Card.Content>
@@ -351,7 +389,7 @@ export default function TemplatesScreen() {
                   onChangeText={setCustomPrompt}
                   multiline
                   mode="outlined"
-                  style={{ marginTop: spacing.md, minHeight: 200, maxHeight: 500 }}
+                  style={{ marginTop: spacing.md, minHeight: 180, maxHeight: 400 }}
                   placeholder="E.g., Make it more formal, include pricing info, etc."
                   contentStyle={{ paddingTop: 8 }}
                 />
@@ -379,6 +417,46 @@ export default function TemplatesScreen() {
                     </Button>
                   </View>
                 )}
+
+                {/* Template Variables Guide - CRITICAL FOR UX */}
+                <InfoPanel
+                  icon="code-braces"
+                  title="Available Variables"
+                  subtitle="The AI will use these variables in your template"
+                  sections={[
+                    {
+                      title: 'Identity',
+                      items: [
+                        { label: '{firstName}', isVariable: true },
+                        { label: '{lastName}', isVariable: true },
+                        { label: '{fullName}', isVariable: true },
+                      ],
+                    },
+                    {
+                      title: 'Contact',
+                      items: [
+                        { label: '{primaryPhone}', isVariable: true },
+                        { label: '{primaryEmail}', isVariable: true },
+                      ],
+                    },
+                    {
+                      title: 'Address',
+                      items: [
+                        { label: '{fullAddress}', isVariable: true },
+                        { label: '{city}', isVariable: true },
+                        { label: '{state}', isVariable: true },
+                      ],
+                    },
+                    {
+                      title: 'Permit',
+                      items: [
+                        { label: '{permitType}', isVariable: true },
+                        { label: '{permitNumber}', isVariable: true },
+                      ],
+                    },
+                  ]}
+                  style={{ marginTop: spacing.xl }}
+                />
               </View>
             </ScrollView>
           </Dialog.ScrollArea>
@@ -526,57 +604,82 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   card: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.xl,          // More space between cards
+    borderRadius: borderRadius.xl,    // More rounded
     ...Platform.select({
       web: {
-        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
         cursor: 'pointer',
+        ':hover': {
+          transform: 'translateY(-2px)',
+        },
       },
     }),
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
+    alignItems: 'flex-start',         // Align to top for better layout
+    marginBottom: spacing.md,
+    gap: spacing.md,
   },
   category: {
-    color: '#666',
-    marginBottom: spacing.sm,
+    color: '#86868B',                 // Better contrast
+    marginBottom: spacing.md,         // More space
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   subject: {
-    fontWeight: '600',
-    marginBottom: spacing.sm,
+    fontWeight: '700',                // Bolder
+    marginBottom: spacing.md,         // More space
+    fontSize: 16,
+    lineHeight: 22,
   },
   body: {
-    marginBottom: spacing.md,
-    lineHeight: 20,
+    marginBottom: spacing.lg,         // More space
+    lineHeight: 22,                   // Better readability
+    fontSize: 14,
+    opacity: 0.9,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: spacing.sm,
+    alignItems: 'center',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xxl,
-    marginTop: spacing.xxl,
+    padding: spacing.xxxl,            // More generous padding
+    marginTop: spacing.xxxl,
   },
   dialog: {
-    maxHeight: '80%',
+    maxHeight: '85%',                 // More room
+    borderRadius: borderRadius.xl,    // Rounded dialog
   },
   dialogContent: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,    // More padding
+    paddingBottom: spacing.md,
   },
   sectionLabel: {
-    marginBottom: spacing.sm,
-    fontWeight: '600',
+    marginBottom: spacing.md,         // More space
+    fontWeight: '700',                // Bolder
+    fontSize: 15,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: '#86868B',
   },
   templateInfo: {
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
+    padding: spacing.lg,              // More padding
+    borderRadius: borderRadius.lg,    // More rounded
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
   },
   variablesGuide: {
     backgroundColor: '#e3f2fd',
@@ -587,16 +690,16 @@ const styles = StyleSheet.create({
     borderLeftColor: '#2196f3',
   },
   optimizationButtons: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    marginTop: spacing.lg,            // More space
+    gap: spacing.md,                  // More gap
   },
   optimizationButton: {
-    marginBottom: spacing.xs,
+    borderRadius: borderRadius.lg,    // More rounded
   },
   optimizationButtonContent: {
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,      // More padding
   },
   clearButton: {
-    marginTop: spacing.xs,
+    borderRadius: borderRadius.lg,    // More rounded
   },
 });

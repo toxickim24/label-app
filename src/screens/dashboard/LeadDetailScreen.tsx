@@ -1012,35 +1012,39 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: spacing.xl,
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.lg,
+    marginBottom: spacing.xl,          // More space
+    borderRadius: borderRadius.xl,      // More rounded
     margin: spacing.xl,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,           // More space
   },
   editActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,              // More space
     gap: spacing.md,
   },
   leadName: {
     fontWeight: '700',
     marginBottom: spacing.sm,
+    fontSize: 24,                       // Larger
+    lineHeight: 32,
   },
   card: {
     marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    padding: spacing.xl,
-    borderRadius: borderRadius.lg,
+    marginBottom: spacing.xl,           // More space between sections
+    padding: spacing.xxl,               // More generous padding
+    borderRadius: borderRadius.xl,      // More rounded
   },
   sectionTitle: {
     fontWeight: '700',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,           // More space
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -1048,9 +1052,11 @@ const styles = StyleSheet.create({
   },
   actionsContainerMobile: {
     flexDirection: 'column',
+    gap: spacing.md,                    // Add gap for mobile
   },
   actionButton: {
     flex: 1,
+    borderRadius: borderRadius.lg,      // More rounded
   },
   actionButtonMobile: {
     width: '100%',
@@ -1058,32 +1064,32 @@ const styles = StyleSheet.create({
   contactActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,                    // Larger gap
   },
   contactDescription: {
     flexWrap: 'nowrap',
     overflow: 'visible',
   },
   contactItemMobile: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,        // More padding
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   contactInfoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,           // More space
   },
   contactActionsMobile: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,                    // Larger gap
     marginLeft: 40,
   },
   divider: {
-    marginVertical: spacing.lg,
+    marginVertical: spacing.xl,         // More space
   },
   input: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,           // More space
   },
   errorContainer: {
     flex: 1,
@@ -1094,7 +1100,7 @@ const styles = StyleSheet.create({
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xxxl,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxxxl,     // More padding
+    paddingHorizontal: spacing.xxl,
   },
 });
