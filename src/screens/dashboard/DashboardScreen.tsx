@@ -606,9 +606,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                   style={[
                     styles.sectionHeader,
                     {
-                      backgroundColor: theme.dark
-                        ? 'rgba(255, 255, 255, 0.05)'
-                        : 'rgba(0, 0, 0, 0.03)',
+                      backgroundColor: theme.colors.background,
                       borderBottomColor: currentTheme.border,
                       borderLeftColor: currentTheme.primary,
                     },
@@ -631,7 +629,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 </View>
               );
             }}
-            stickySectionHeadersEnabled={true}
+            stickySectionHeadersEnabled={false}
             ListEmptyComponent={
               searchQuery || statusFilter !== 'all' || selectedPermitType !== 'all' ? (
                 // Filtered results empty state

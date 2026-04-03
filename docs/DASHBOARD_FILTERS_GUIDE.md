@@ -199,8 +199,8 @@ Organizes leads into time-based sections:
 - **Section headers** with lead counts
 - **Calendar icon** (📅) in header
 - **Colored left border** (primary blue)
-- **Subtle background** for headers
-- **Sticky headers** when scrolling
+- **Clean background** matching app theme
+- Headers scroll naturally with content (non-sticky)
 
 ### List View
 Simple continuous list without section breaks.
