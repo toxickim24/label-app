@@ -73,12 +73,27 @@ function convertFirestoreToLead(id: string, data: any): Lead {
     zipCode: data.zipCode || '',
     county: data.county || '',
 
+    // Licensed Contractor Information
+    licensedName: data.licensedName || '',
+    licensedContractorNumber: data.licensedContractorNumber || '',
+    licensedStreet: data.licensedStreet || '',
+    licensedCity: data.licensedCity || '',
+    licensedState: data.licensedState || '',
+    licensedZip: data.licensedZip || '',
+    licensedContact: data.licensedContact || '',
+
     // Permit Info
     permitType: data.permitType || 'pool_permits',
     permitDate: data.permitDate ? convertTimestamp(data.permitDate) : null,
 
     // Status
     status: data.status || 'new',
+    statusHistory: (data.statusHistory || []).map((sh: any) => ({
+      from: sh.from,
+      to: sh.to,
+      changedAt: convertTimestamp(sh.changedAt),
+      changedBy: sh.changedBy,
+    })),
 
     // Legacy field mappings
     recordId: data.permitNumber || '',
@@ -201,6 +216,7 @@ export async function createLead(leadData: Partial<Lead>): Promise<string> {
       createdAt: serverTimestamp(),
       lastUpdated: serverTimestamp(),
       status: leadData.status || 'new',
+      statusHistory: [],
       notes: [],
       tags: [],
       communications: [],

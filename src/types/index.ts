@@ -31,6 +31,14 @@ export interface UserPermissions {
   roof_permits: Permission;
 }
 
+export interface NotificationPreferences {
+  enabled: boolean;
+  dailyLeadNotification: boolean;
+  staleLeadReminders: boolean;
+  newLeadAlerts: boolean;
+  notificationTime: string; // Format: "HH:MM" (e.g., "08:00")
+}
+
 export interface User {
   uid: string;
   email: string;
@@ -48,15 +56,22 @@ export interface User {
   fcmTokens: string[];
   badgeCount: number;
   photoURL?: string;
+  notificationPreferences?: NotificationPreferences;
 }
 
 // ============================================================================
 // LEAD TYPES
 // ============================================================================
 
+// 6-Stage Pipeline Status
 export type LeadStatus =
   | 'new'
   | 'contacted'
+  | 'engaged'
+  | 'est_sent'
+  | 'appointment'
+  | 'closing'
+  // Legacy statuses (backwards compatibility)
   | 'responded'
   | 'qualified'
   | 'disqualified'
@@ -78,6 +93,13 @@ export interface Communication {
   subject?: string;
 }
 
+export interface StatusChange {
+  from: LeadStatus | null;
+  to: LeadStatus;
+  changedAt: Date;
+  changedBy: string;
+}
+
 export interface Lead {
   id: string;
   recordId: string;
@@ -89,6 +111,15 @@ export interface Lead {
   state: string;
   zipCode: string;
   county: string;
+
+  // Licensed Contractor Information
+  licensedName?: string;
+  licensedContractorNumber?: string;
+  licensedStreet?: string;
+  licensedCity?: string;
+  licensedState?: string;
+  licensedZip?: string;
+  licensedContact?: string;
 
   // Contact
   fullName: string;
@@ -105,6 +136,7 @@ export interface Lead {
 
   // Status
   status: LeadStatus;
+  statusHistory: StatusChange[];
 
   // Communication
   communications: Communication[];

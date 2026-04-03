@@ -3,10 +3,11 @@
  */
 
 import { MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
-import { lightTheme, darkTheme, getTheme, getStatusColor } from './colors';
+import { lightTheme, darkTheme } from './colors';
 
 /**
  * React Native Paper Theme (Material Design 3)
+ * Updated with DM Sans font family
  */
 export const paperLightTheme = {
   ...MD3LightTheme,
@@ -19,6 +20,24 @@ export const paperLightTheme = {
     text: lightTheme.text,
     onSurface: lightTheme.text,
     onBackground: lightTheme.text,
+  },
+  fonts: {
+    ...MD3LightTheme.fonts,
+    displayLarge: { ...MD3LightTheme.fonts.displayLarge, fontFamily: 'DMSans_700Bold' },
+    displayMedium: { ...MD3LightTheme.fonts.displayMedium, fontFamily: 'DMSans_700Bold' },
+    displaySmall: { ...MD3LightTheme.fonts.displaySmall, fontFamily: 'DMSans_700Bold' },
+    headlineLarge: { ...MD3LightTheme.fonts.headlineLarge, fontFamily: 'DMSans_700Bold' },
+    headlineMedium: { ...MD3LightTheme.fonts.headlineMedium, fontFamily: 'DMSans_600SemiBold' },
+    headlineSmall: { ...MD3LightTheme.fonts.headlineSmall, fontFamily: 'DMSans_600SemiBold' },
+    titleLarge: { ...MD3LightTheme.fonts.titleLarge, fontFamily: 'DMSans_600SemiBold' },
+    titleMedium: { ...MD3LightTheme.fonts.titleMedium, fontFamily: 'DMSans_500Medium' },
+    titleSmall: { ...MD3LightTheme.fonts.titleSmall, fontFamily: 'DMSans_500Medium' },
+    bodyLarge: { ...MD3LightTheme.fonts.bodyLarge, fontFamily: 'DMSans_400Regular' },
+    bodyMedium: { ...MD3LightTheme.fonts.bodyMedium, fontFamily: 'DMSans_400Regular' },
+    bodySmall: { ...MD3LightTheme.fonts.bodySmall, fontFamily: 'DMSans_400Regular' },
+    labelLarge: { ...MD3LightTheme.fonts.labelLarge, fontFamily: 'DMSans_500Medium' },
+    labelMedium: { ...MD3LightTheme.fonts.labelMedium, fontFamily: 'DMSans_500Medium' },
+    labelSmall: { ...MD3LightTheme.fonts.labelSmall, fontFamily: 'DMSans_500Medium' },
   },
 };
 
@@ -33,6 +52,24 @@ export const paperDarkTheme = {
     text: darkTheme.text,
     onSurface: darkTheme.text,
     onBackground: darkTheme.text,
+  },
+  fonts: {
+    ...MD3DarkTheme.fonts,
+    displayLarge: { ...MD3DarkTheme.fonts.displayLarge, fontFamily: 'DMSans_700Bold' },
+    displayMedium: { ...MD3DarkTheme.fonts.displayMedium, fontFamily: 'DMSans_700Bold' },
+    displaySmall: { ...MD3DarkTheme.fonts.displaySmall, fontFamily: 'DMSans_700Bold' },
+    headlineLarge: { ...MD3DarkTheme.fonts.headlineLarge, fontFamily: 'DMSans_700Bold' },
+    headlineMedium: { ...MD3DarkTheme.fonts.headlineMedium, fontFamily: 'DMSans_600SemiBold' },
+    headlineSmall: { ...MD3DarkTheme.fonts.headlineSmall, fontFamily: 'DMSans_600SemiBold' },
+    titleLarge: { ...MD3DarkTheme.fonts.titleLarge, fontFamily: 'DMSans_600SemiBold' },
+    titleMedium: { ...MD3DarkTheme.fonts.titleMedium, fontFamily: 'DMSans_500Medium' },
+    titleSmall: { ...MD3DarkTheme.fonts.titleSmall, fontFamily: 'DMSans_500Medium' },
+    bodyLarge: { ...MD3DarkTheme.fonts.bodyLarge, fontFamily: 'DMSans_400Regular' },
+    bodyMedium: { ...MD3DarkTheme.fonts.bodyMedium, fontFamily: 'DMSans_400Regular' },
+    bodySmall: { ...MD3DarkTheme.fonts.bodySmall, fontFamily: 'DMSans_400Regular' },
+    labelLarge: { ...MD3DarkTheme.fonts.labelLarge, fontFamily: 'DMSans_500Medium' },
+    labelMedium: { ...MD3DarkTheme.fonts.labelMedium, fontFamily: 'DMSans_500Medium' },
+    labelSmall: { ...MD3DarkTheme.fonts.labelSmall, fontFamily: 'DMSans_500Medium' },
   },
 };
 
@@ -343,4 +380,12 @@ export const utils = {
   },
 };
 
-export { lightTheme, darkTheme, getTheme, getStatusColor };
+// Re-export color utilities
+export {
+  lightTheme,
+  darkTheme,
+  getTheme,
+  getStatusColor,
+  statusBadgeConfig,
+  getStatusBadgeConfig,
+} from './colors';

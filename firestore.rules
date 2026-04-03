@@ -38,7 +38,15 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if false;
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdminOrMaster());
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdminOrMaster()) &&
+                       // Validate notification preferences if present
+                       (!('notificationPreferences' in request.resource.data) ||
+                        (request.resource.data.notificationPreferences.keys().hasAll(['enabled', 'dailyLeadNotification', 'staleLeadReminders', 'newLeadAlerts', 'notificationTime']) &&
+                         request.resource.data.notificationPreferences.enabled is bool &&
+                         request.resource.data.notificationPreferences.dailyLeadNotification is bool &&
+                         request.resource.data.notificationPreferences.staleLeadReminders is bool &&
+                         request.resource.data.notificationPreferences.newLeadAlerts is bool &&
+                         request.resource.data.notificationPreferences.notificationTime is string));
       allow delete: if false;
     }
 
@@ -49,7 +57,24 @@ service cloud.firestore {
     match /leads/{leadId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow update: if isAuthenticated() &&
+                       // Validate status is one of the allowed values
+                       (!('status' in request.resource.data) ||
+                        request.resource.data.status in ['new', 'contacted', 'engaged', 'est_sent', 'appointment', 'closing', 'responded', 'qualified', 'disqualified', 'converted', 'invalid']) &&
+                       // Validate statusHistory is an array if present
+                       (!('statusHistory' in request.resource.data) ||
+                        request.resource.data.statusHistory is list) &&
+                       // Validate contactedCount is a number if present
+                       (!('contactedCount' in request.resource.data) ||
+                        request.resource.data.contactedCount is int) &&
+                       // Validate lastContactedAt is timestamp if present
+                       (!('lastContactedAt' in request.resource.data) ||
+                        request.resource.data.lastContactedAt == null ||
+                        request.resource.data.lastContactedAt is timestamp) &&
+                       // Validate lastContactedBy is string if present
+                       (!('lastContactedBy' in request.resource.data) ||
+                        request.resource.data.lastContactedBy == null ||
+                        request.resource.data.lastContactedBy is string);
       allow delete: if isAuthenticated() && isAdminOrMaster();
     }
 

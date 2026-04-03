@@ -8,12 +8,13 @@ import { View, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity } from 
 import { Text, List, Button, Divider, useTheme, Avatar, Appbar } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useAuthStore, useThemeStore } from '../../store';
-import { spacing, borderRadius, shadows } from '../../theme';
+import { spacing, borderRadius, shadows, darkTheme, lightTheme } from '../../theme';
 import WebContainer from '../../components/WebContainer';
 import { useResponsive } from '../../hooks/useResponsive';
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
+  const currentTheme = theme.dark ? darkTheme : lightTheme;
   const { isMobile } = useResponsive();
   const { user, logout } = useAuthStore();
   const { mode, setTheme } = useThemeStore();
@@ -54,23 +55,24 @@ export default function SettingsScreen({ navigation }: any) {
           {/* Profile Section */}
           <View style={styles.profileSection}>
             <Avatar.Text
-              size={80}
+              size={64}
               label={user?.displayName?.charAt(0) || 'U'}
-              style={{ backgroundColor: theme.colors.primary }}
+              style={{ backgroundColor: currentTheme.primary }}
             />
-            <Text variant="titleLarge" style={styles.displayName}>
+            <Text style={[styles.displayName, { color: currentTheme.text }]}>
               {user?.displayName || 'User'}
             </Text>
-            <Text variant="bodyMedium" style={{ color: theme.colors.secondary }}>
+            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 13, color: currentTheme.textSecondary }}>
               {user?.email}
             </Text>
             <Text
-              variant="bodySmall"
               style={{
-                color: theme.colors.primary,
+                fontFamily: 'DMSans_700Bold',
+                fontSize: 11,
+                color: currentTheme.primary,
                 marginTop: spacing.xs,
                 textTransform: 'uppercase',
-                fontWeight: '600',
+                letterSpacing: 0.5,
               }}
             >
               {user?.role}
@@ -81,86 +83,83 @@ export default function SettingsScreen({ navigation }: any) {
 
           {/* Theme Section */}
           <List.Section>
-            <List.Subheader style={{ fontWeight: '700', fontSize: 13, letterSpacing: 0.5 }}>
+            <List.Subheader style={{ fontFamily: 'DMSans_700Bold', fontSize: 11, letterSpacing: 0.8, color: currentTheme.textSecondary }}>
               APPEARANCE
             </List.Subheader>
 
             <View style={styles.themeContainer}>
-              <View style={[styles.themeOption, mode === 'light' && styles.themeOptionActive, { borderColor: theme.colors.outline }]}>
+              <View style={[styles.themeOption, mode === 'light' && styles.themeOptionActive, { borderColor: mode === 'light' ? currentTheme.primary : currentTheme.border }]}>
                 <TouchableOpacity
                   style={styles.themeButton}
                   onPress={() => setTheme('light')}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.themeIconContainer, mode === 'light' && { backgroundColor: theme.colors.primary }]}>
-                    <Icon name="white-balance-sunny" size={24} color={mode === 'light' ? '#fff' : theme.colors.onSurfaceVariant} />
+                  <View style={[styles.themeIconContainer, mode === 'light' && { backgroundColor: currentTheme.primary }]}>
+                    <Icon name="white-balance-sunny" size={20} color={mode === 'light' ? '#fff' : currentTheme.textSecondary} />
                   </View>
                   <Text
-                    variant="titleSmall"
                     style={[
                       styles.themeLabel,
-                      { color: mode === 'light' ? theme.colors.primary : theme.colors.onSurface }
+                      { color: mode === 'light' ? currentTheme.primary : currentTheme.text }
                     ]}
                   >
                     Light
                   </Text>
                   {mode === 'light' && (
-                    <Icon name="check-circle" size={20} color={theme.colors.primary} style={styles.themeCheck} />
+                    <Icon name="check-circle" size={16} color={currentTheme.primary} style={styles.themeCheck} />
                   )}
                 </TouchableOpacity>
               </View>
 
-              <View style={[styles.themeOption, mode === 'dark' && styles.themeOptionActive, { borderColor: theme.colors.outline }]}>
+              <View style={[styles.themeOption, mode === 'dark' && styles.themeOptionActive, { borderColor: mode === 'dark' ? currentTheme.primary : currentTheme.border }]}>
                 <TouchableOpacity
                   style={styles.themeButton}
                   onPress={() => setTheme('dark')}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.themeIconContainer, mode === 'dark' && { backgroundColor: theme.colors.primary }]}>
-                    <Icon name="moon-waning-crescent" size={24} color={mode === 'dark' ? '#fff' : theme.colors.onSurfaceVariant} />
+                  <View style={[styles.themeIconContainer, mode === 'dark' && { backgroundColor: currentTheme.primary }]}>
+                    <Icon name="moon-waning-crescent" size={20} color={mode === 'dark' ? '#fff' : currentTheme.textSecondary} />
                   </View>
                   <Text
-                    variant="titleSmall"
                     style={[
                       styles.themeLabel,
-                      { color: mode === 'dark' ? theme.colors.primary : theme.colors.onSurface }
+                      { color: mode === 'dark' ? currentTheme.primary : currentTheme.text }
                     ]}
                   >
                     Dark
                   </Text>
                   {mode === 'dark' && (
-                    <Icon name="check-circle" size={20} color={theme.colors.primary} style={styles.themeCheck} />
+                    <Icon name="check-circle" size={16} color={currentTheme.primary} style={styles.themeCheck} />
                   )}
                 </TouchableOpacity>
               </View>
 
-              <View style={[styles.themeOption, mode === 'system' && styles.themeOptionActive, { borderColor: theme.colors.outline }]}>
+              <View style={[styles.themeOption, mode === 'system' && styles.themeOptionActive, { borderColor: mode === 'system' ? currentTheme.primary : currentTheme.border }]}>
                 <TouchableOpacity
                   style={styles.themeButton}
                   onPress={() => setTheme('system')}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.themeIconContainer, mode === 'system' && { backgroundColor: theme.colors.primary }]}>
-                    <Icon name="brightness-auto" size={24} color={mode === 'system' ? '#fff' : theme.colors.onSurfaceVariant} />
+                  <View style={[styles.themeIconContainer, mode === 'system' && { backgroundColor: currentTheme.primary }]}>
+                    <Icon name="brightness-auto" size={20} color={mode === 'system' ? '#fff' : currentTheme.textSecondary} />
                   </View>
                   <Text
-                    variant="titleSmall"
                     style={[
                       styles.themeLabel,
-                      { color: mode === 'system' ? theme.colors.primary : theme.colors.onSurface }
+                      { color: mode === 'system' ? currentTheme.primary : currentTheme.text }
                     ]}
                   >
                     Auto
                   </Text>
                   {mode === 'system' && (
-                    <Icon name="check-circle" size={20} color={theme.colors.primary} style={styles.themeCheck} />
+                    <Icon name="check-circle" size={16} color={currentTheme.primary} style={styles.themeCheck} />
                   )}
                 </TouchableOpacity>
               </View>
             </View>
 
             {mode === 'system' && (
-              <Text variant="bodySmall" style={{ marginHorizontal: spacing.lg, marginTop: spacing.sm, color: theme.colors.onSurfaceVariant }}>
+              <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 11, marginHorizontal: spacing.md, marginTop: spacing.xs, color: currentTheme.textSecondary }}>
                 Follows your device's system theme settings
               </Text>
             )}
@@ -215,7 +214,7 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
 
           <View style={styles.footer}>
-            <Text variant="bodySmall" style={{ color: theme.colors.secondary, textAlign: 'center' }}>
+            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 11, color: currentTheme.textSecondary, textAlign: 'center' }}>
               Label App{'\n'}
               Manage leads. Close deals.
             </Text>
@@ -232,23 +231,23 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     alignItems: 'center',
-    padding: spacing.xxxl,
-    paddingBottom: spacing.xxl,
+    padding: spacing.xxl,
+    paddingBottom: spacing.xl,
   },
   displayName: {
-    marginTop: spacing.lg,
-    fontWeight: '700',
-    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    marginTop: spacing.md,
+    fontSize: 18,
   },
   themeContainer: {
     flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
   },
   themeOption: {
     flex: 1,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.md,
     borderWidth: 2,
     overflow: 'hidden',
     backgroundColor: 'transparent',
@@ -259,42 +258,42 @@ const styles = StyleSheet.create({
     }),
   },
   themeOptionActive: {
-    ...shadows.md,
+    ...shadows.sm,
   },
   themeButton: {
     alignItems: 'center',
-    padding: spacing.lg,
-    paddingVertical: spacing.xl,
+    padding: spacing.md,
+    paddingVertical: spacing.lg,
     position: 'relative',
   },
   themeIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.05)',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   themeLabel: {
-    fontWeight: '700',
-    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 13,
     textAlign: 'center',
   },
   themeCheck: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
+    top: spacing.xs,
+    right: spacing.xs,
   },
   accountSection: {
-    padding: spacing.xl,
+    padding: spacing.lg,
   },
   logoutButton: {
-    marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
+    marginTop: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   footer: {
-    padding: spacing.xxxl,
-    paddingTop: spacing.lg,
+    padding: spacing.xl,
+    paddingTop: spacing.md,
   },
 });

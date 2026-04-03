@@ -284,8 +284,8 @@ interface ThemeState {
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  mode: 'system',
-  isDark: false,
+  mode: 'dark',       // Default to dark theme (dark-first design)
+  isDark: true,       // Start with dark theme enabled
 
   setTheme: (mode) => {
     set({ mode });
@@ -532,9 +532,15 @@ export const useLeadsStore = create<LeadsState>((set, get) => ({
             return;
           }
 
-          // Allow empty strings for notes and description (so they can be cleared)
-          // Skip empty strings for other fields
-          if (value === '' && key !== 'notes' && key !== 'description') {
+          // Allow empty strings for clearable fields (notes, description, name fields, and all contractor fields)
+          // Skip empty strings for other required fields
+          const clearableFields = [
+            'notes', 'description',
+            'firstName', 'lastName', 'fullName',
+            'licensedContact', 'licensedStreet', 'licensedCity', 'licensedState', 'licensedZip',
+            'licensedName', 'licensedContractorNumber'
+          ];
+          if (value === '' && !clearableFields.includes(key)) {
             return;
           }
 

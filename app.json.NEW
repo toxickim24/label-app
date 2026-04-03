@@ -1,0 +1,109 @@
+{
+  "expo": {
+    "name": "Label CRM",
+    "slug": "label-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "labelcrm",
+    "description": "Professional lead management and CRM for contractors. Track leads, manage communications, and close more deals.",
+    "primaryColor": "#007AFF",
+
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
+    ],
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.labelapp.mobile",
+      "buildNumber": "1",
+      "googleServicesFile": "./ios/GoogleService-Info.plist",
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "Label CRM needs camera access to take photos of job sites and property inspections.",
+        "NSPhotoLibraryUsageDescription": "Label CRM needs access to your photo library to upload project photos and documentation.",
+        "NSPhotoLibraryAddUsageDescription": "Label CRM needs permission to save photos to your library for record keeping.",
+        "NSLocationWhenInUseUsageDescription": "Label CRM uses your location to help you find nearby leads and job sites.",
+        "NSContactsUsageDescription": "Label CRM needs access to your contacts to help you quickly add lead information.",
+        "UIBackgroundModes": ["remote-notification"],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false
+        }
+      },
+      "config": {
+        "googleMapsApiKey": ""
+      }
+    },
+
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.labelapp.mobile",
+      "versionCode": 1,
+      "googleServicesFile": "./android/app/google-services.json",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_CONTACTS"
+      ]
+    },
+
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#007AFF",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "New notification from Label CRM"
+    },
+
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    },
+
+    "owner": "your-expo-username",
+
+    "hooks": {
+      "postPublish": []
+    }
+  }
+}

@@ -9,7 +9,7 @@ import { Text, Card, Button, useTheme, Chip, Dialog, Portal, RadioButton, TextIn
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTemplatesStore } from '../../store';
 import { Template, PermitType, TemplateCategory } from '../../types';
-import { spacing, borderRadius } from '../../theme';
+import { spacing, borderRadius, darkTheme, lightTheme, shadows } from '../../theme';
 import InfoPanel from '../../components/InfoPanel';
 import EmptyState from '../../components/EmptyState';
 import WebContainer from '../../components/WebContainer';
@@ -36,6 +36,7 @@ Do not invent information.`;
 
 export default function TemplatesScreen() {
   const theme = useTheme();
+  const currentTheme = theme.dark ? darkTheme : lightTheme;
   const { isMobile, containerPadding } = useResponsive();
   const { templates, setTemplates } = useTemplatesStore();
   const [showDialog, setShowDialog] = useState(false);
@@ -242,17 +243,16 @@ export default function TemplatesScreen() {
 
   const renderTemplate = ({ item }: { item: Template }) => (
     <TouchableOpacity onPress={() => handleTemplateClick(item)} activeOpacity={0.7}>
-      <Card style={styles.card} mode="elevated" elevation={2}>
+      <Card style={[styles.card, { backgroundColor: currentTheme.surface, borderColor: currentTheme.border }]} mode="elevated" elevation={1}>
         <Card.Content>
           <View style={styles.header}>
             <Text
-              variant="titleLarge"
               style={{
                 flex: 1,
-                fontWeight: '700',
-                fontSize: 17,
-                lineHeight: 24,
-                color: theme.colors.onSurface,
+                fontFamily: 'DMSans_700Bold',
+                fontSize: 15,
+                lineHeight: 20,
+                color: currentTheme.text,
               }}
               numberOfLines={2}
             >
@@ -261,21 +261,20 @@ export default function TemplatesScreen() {
             <Chip
               mode="flat"
               style={{
-                backgroundColor: theme.dark
-                  ? 'rgba(10, 132, 255, 0.15)'
-                  : theme.colors.primaryContainer,
-                height: 28,
+                backgroundColor: currentTheme.primary + '15',
+                height: 24,
               }}
               textStyle={{
-                fontSize: 11,
-                fontWeight: '700',
+                fontFamily: 'DMSans_700Bold',
+                fontSize: 10,
                 letterSpacing: 0.5,
+                color: currentTheme.primary,
               }}
               icon={() => (
                 <Icon
                   name="robot"
-                  size={14}
-                  color={theme.dark ? theme.colors.primary : theme.colors.onPrimaryContainer}
+                  size={12}
+                  color={currentTheme.primary}
                 />
               )}
             >
@@ -283,35 +282,34 @@ export default function TemplatesScreen() {
             </Chip>
           </View>
 
-          <Text variant="labelSmall" style={[styles.category, { color: theme.colors.onSurfaceVariant }]}>
+          <Text style={[styles.category, { color: currentTheme.textSecondary }]}>
             {item.category.replace(/_/g, ' ')}
           </Text>
 
           {item.subject && (
-            <Text variant="titleSmall" style={[styles.subject, { color: theme.colors.onSurface }]} numberOfLines={2}>
+            <Text style={[styles.subject, { color: currentTheme.text }]} numberOfLines={2}>
               {item.subject}
             </Text>
           )}
 
           <Text
-            variant="bodyMedium"
             numberOfLines={3}
-            style={[styles.body, { color: theme.colors.onSurfaceVariant }]}
+            style={[styles.body, { color: currentTheme.textSecondary }]}
           >
             {item.body}
           </Text>
 
-          <View style={[styles.footer, theme.dark && { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
+          <View style={[styles.footer, { borderTopColor: currentTheme.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Icon name="chart-line" size={14} color={theme.colors.onSurfaceVariant} />
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+              <Icon name="chart-line" size={12} color={currentTheme.textSecondary} />
+              <Text style={{ fontFamily: 'DMSans_400Regular', color: currentTheme.textSecondary, fontSize: 11 }}>
                 Used {item.timesUsed} {item.timesUsed === 1 ? 'time' : 'times'}
               </Text>
             </View>
             {item.lastUsedAt && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Icon name="clock-outline" size={14} color={theme.colors.onSurfaceVariant} />
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+                <Icon name="clock-outline" size={12} color={currentTheme.textSecondary} />
+                <Text style={{ fontFamily: 'DMSans_400Regular', color: currentTheme.textSecondary, fontSize: 11 }}>
                   {new Date(item.lastUsedAt).toLocaleDateString()}
                 </Text>
               </View>
@@ -325,8 +323,8 @@ export default function TemplatesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <WebContainer maxWidth="xl">
-        <View style={[styles.headerContainer, { padding: containerPadding, paddingBottom: spacing.md }]}>
-          <Text variant="headlineSmall">Templates</Text>
+        <View style={[styles.headerContainer, { padding: containerPadding, paddingBottom: spacing.sm }]}>
+          <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 24, color: currentTheme.text }}>Templates</Text>
           <Button
             mode="contained"
             icon="plus"
@@ -604,8 +602,10 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   card: {
-    marginBottom: spacing.xl,          // More space between cards
-    borderRadius: borderRadius.xl,    // More rounded
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    ...shadows.sm,
     ...Platform.select({
       web: {
         transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -619,87 +619,86 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',         // Align to top for better layout
-    marginBottom: spacing.md,
-    gap: spacing.md,
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
   category: {
-    color: '#86868B',                 // Better contrast
-    marginBottom: spacing.md,         // More space
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
+    marginBottom: spacing.sm,
+    fontSize: 11,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   subject: {
-    fontWeight: '700',                // Bolder
-    marginBottom: spacing.md,         // More space
-    fontSize: 16,
-    lineHeight: 22,
+    fontFamily: 'DMSans_700Bold',
+    marginBottom: spacing.sm,
+    fontSize: 15,
+    lineHeight: 20,
   },
   body: {
-    marginBottom: spacing.lg,         // More space
-    lineHeight: 22,                   // Better readability
-    fontSize: 14,
-    opacity: 0.9,
+    fontFamily: 'DMSans_400Regular',
+    marginBottom: spacing.md,
+    lineHeight: 20,
+    fontSize: 13,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.05)',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xxxl,            // More generous padding
-    marginTop: spacing.xxxl,
+    padding: spacing.xxl,
+    marginTop: spacing.xl,
   },
   dialog: {
-    maxHeight: '85%',                 // More room
-    borderRadius: borderRadius.xl,    // Rounded dialog
+    maxHeight: '85%',
+    borderRadius: borderRadius.md,
   },
   dialogContent: {
-    paddingHorizontal: spacing.lg,    // More padding
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
   },
   sectionLabel: {
-    marginBottom: spacing.md,         // More space
-    fontWeight: '700',                // Bolder
-    fontSize: 15,
+    marginBottom: spacing.sm,
+    fontWeight: '700',
+    fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     color: '#86868B',
   },
   templateInfo: {
-    padding: spacing.lg,              // More padding
-    borderRadius: borderRadius.lg,    // More rounded
-    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
   },
   variablesGuide: {
     backgroundColor: '#e3f2fd',
-    padding: spacing.md,
+    padding: spacing.sm,
     borderRadius: 8,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderLeftWidth: 4,
     borderLeftColor: '#2196f3',
   },
   optimizationButtons: {
-    marginTop: spacing.lg,            // More space
-    gap: spacing.md,                  // More gap
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   optimizationButton: {
-    borderRadius: borderRadius.lg,    // More rounded
+    borderRadius: borderRadius.md,
   },
   optimizationButtonContent: {
-    paddingVertical: spacing.sm,      // More padding
+    paddingVertical: spacing.xs,
   },
   clearButton: {
-    borderRadius: borderRadius.lg,    // More rounded
+    borderRadius: borderRadius.md,
   },
 });

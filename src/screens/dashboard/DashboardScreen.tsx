@@ -3,20 +3,24 @@
  * Main screen showing leads
  */
 
-import React, { useEffect } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Platform, ScrollView } from 'react-native';
-import { Text, Card, Chip, Searchbar, useTheme, Surface } from 'react-native-paper';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Platform, ScrollView, Linking } from 'react-native';
+import { Text, Card, Chip, Searchbar, useTheme, Surface, Dialog, Portal, Button, Snackbar } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
-import { useLeadsStore } from '../../store';
+import * as Clipboard from 'expo-clipboard';
+import { useLeadsStore, useAuthStore } from '../../store';
 import { subscribeToLeads } from '../../services/leadsService';
-import { Lead, PermitType } from '../../types';
-import { getStatusColor } from '../../theme';
+import { Lead, PermitType, Template } from '../../types';
+import { subscribeToTemplates, incrementTemplateUsage } from '../../services/templatesService';
+import { getStatusColor, lightTheme, darkTheme } from '../../theme';
 import { spacing, borderRadius, shadows } from '../../theme';
 import WebContainer from '../../components/WebContainer';
 import EmptyState from '../../components/EmptyState';
+import { LeadCard } from '../../components/LeadCard';
 import { getLeadHealth, getLeadHealthInfo } from '../../utils/leadHealth';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import { useResponsive } from '../../hooks/useResponsive';
+import { sortByPriority, sortByNewest, sortByOldest, filterStaleLeads } from '../../utils/leadUtils';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -26,7 +30,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   console.log('📊 DashboardScreen rendering...');
 
   const theme = useTheme();
+  const currentTheme = theme.dark ? darkTheme : lightTheme;
   const { isMobile, isTablet, containerPadding } = useResponsive();
+  const user = useAuthStore((state) => state.user);
   const {
     leads,
     setLeads,
@@ -40,6 +46,15 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [selectedPermitType, setSelectedPermitType] = React.useState<PermitType | 'all'>('all');
+  const [showStaleOnly, setShowStaleOnly] = React.useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  // Always use priority sorting (smart: stale leads + status-based priority)
+  const sortBy = 'priority';
 
   // Subscribe to Firestore leads in real-time
   // Note: We fetch ALL leads and filter locally for better UX (instant filtering)
@@ -56,6 +71,17 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     };
   }, [setLeads]);
 
+  // Subscribe to templates
+  useEffect(() => {
+    console.log('📡 Setting up templates Firestore subscription...');
+    const unsubscribe = subscribeToTemplates('all', (fetchedTemplates) => {
+      setTemplates(fetchedTemplates);
+      console.log(`✅ Loaded ${fetchedTemplates.length} templates`);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Filter leads based on local selectedPermitType, search, and status
   const filteredLeads = React.useMemo(() => {
     let filtered = leads;
@@ -68,6 +94,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     // Filter by status
     if (statusFilter !== 'all') {
       filtered = filtered.filter(lead => lead.status === statusFilter);
+    }
+
+    // Filter by stale leads only
+    if (showStaleOnly) {
+      filtered = filterStaleLeads(filtered);
     }
 
     // Filter by search query
@@ -84,9 +115,17 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       );
     }
 
-    // Sort by newest first
-    return filtered.sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime());
-  }, [leads, selectedPermitType, statusFilter, searchQuery]);
+    // Apply sorting
+    switch (sortBy) {
+      case 'priority':
+        return sortByPriority(filtered);
+      case 'oldest':
+        return sortByOldest(filtered);
+      case 'newest':
+      default:
+        return sortByNewest(filtered);
+    }
+  }, [leads, selectedPermitType, statusFilter, searchQuery, sortBy, showStaleOnly]);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -96,114 +135,104 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     setRefreshing(false);
   }, []);
 
-  const renderLeadCard = ({ item }: { item: Lead }) => {
-    const leadHealth = getLeadHealth(item);
-    const healthInfo = getLeadHealthInfo(leadHealth);
-    const lastActivityDate = item.lastContactedAt || item.createdDate;
+  // Calculate dashboard stats
+  const stats = React.useMemo(() => {
+    const totalLeads = leads.length;
+    const activeLeads = leads.filter(
+      (lead) => !['closing', 'disqualified', 'invalid'].includes(lead.status)
+    ).length;
 
-    return (
-      <TouchableOpacity
-        onPress={() => {
-          if (item.id) {
-            navigation.navigate('LeadDetail', { leadId: item.id });
-          }
-        }}
-        activeOpacity={0.8}
-      >
-        <Surface
-          style={[
-            styles.card,
-            {
-              backgroundColor: theme.colors.surface,
-              borderLeftWidth: 4,
-              borderLeftColor: healthInfo.color,
-            },
-            shadows.sm,
-          ]}
-        >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <Icon
-              name={
-                item.permitType === 'pool_permits'
-                  ? 'pool'
-                  : item.permitType === 'kitchen_bath_permits'
-                  ? 'silverware-fork-knife'
-                  : 'home-roof'
-              }
-              size={20}
-              color={theme.colors.primary}
-              style={styles.cardIcon}
-            />
-            <Text
-              variant="labelLarge"
-              style={[styles.recordId, { color: theme.colors.onSurfaceVariant }]}
-            >
-              {item.recordId}
-            </Text>
-          </View>
-          <Chip
-            mode="flat"
-            compact
-            style={{
-              backgroundColor: getStatusColor(item.status, theme.dark),
-              height: 28,
-            }}
-            textStyle={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600' }}
-          >
-            {item.status.toUpperCase()}
-          </Chip>
-        </View>
+    // This week's leads (last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const thisWeekLeads = leads.filter(
+      (lead) => lead.createdDate >= weekAgo
+    ).length;
 
-        <Text
-          variant="titleLarge"
-          style={[styles.name, { color: theme.colors.onSurface }]}
-          numberOfLines={1}
-        >
-          {item.fullName}
-        </Text>
+    // Closing soon (est_sent + appointment statuses)
+    const closingSoonLeads = leads.filter(
+      (lead) => lead.status === 'est_sent' || lead.status === 'appointment'
+    ).length;
 
-        <View style={styles.addressRow}>
-          <Icon name="map-marker" size={18} color={theme.colors.onSurfaceVariant} />
-          <Text
-            variant="bodyMedium"
-            style={[styles.address, { color: theme.colors.onSurfaceVariant }]}
-            numberOfLines={2}
-          >
-            {item.fullAddress}
-          </Text>
-        </View>
+    return {
+      total: totalLeads,
+      active: activeLeads,
+      thisWeek: thisWeekLeads,
+      closingSoon: closingSoonLeads,
+    };
+  }, [leads]);
 
-        <View style={[styles.footer, theme.dark && { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
-          <View style={styles.footerLeft}>
-            <View style={[
-              styles.footerBadge,
-              theme.dark && {
-                backgroundColor: 'rgba(10, 132, 255, 0.12)',
-                borderColor: 'rgba(10, 132, 255, 0.2)',
-              },
-            ]}>
-              <Text
-                variant="labelSmall"
-                style={[styles.footerBadgeText, { color: theme.colors.primary }]}
-              >
-                {item.permitType.replace(/_/g, ' ').replace('permits', '').trim().toUpperCase()}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.footerRight}>
-            <Icon name="clock-outline" size={14} color={theme.colors.onSurfaceVariant} style={{ marginRight: 4 }} />
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 13 }}>
-              {formatRelativeTime(lastActivityDate)}
-            </Text>
-          </View>
-        </View>
-      </Surface>
-    </TouchableOpacity>
-    );
+  const replaceTemplateVariables = (text: string, lead: Lead): string => {
+    return text
+      .replace(/\{firstName\}/g, lead.firstName || '')
+      .replace(/\{lastName\}/g, lead.lastName || '')
+      .replace(/\{fullName\}/g, lead.fullName || '')
+      .replace(/\{address\}/g, lead.fullAddress || '')
+      .replace(/\{fullAddress\}/g, lead.fullAddress || '')
+      .replace(/\{street\}/g, lead.street || '')
+      .replace(/\{city\}/g, lead.city || '')
+      .replace(/\{state\}/g, lead.state || '')
+      .replace(/\{zipCode\}/g, lead.zipCode || '')
+      .replace(/\{zip\}/g, lead.zipCode || '')
+      .replace(/\{county\}/g, lead.county || '')
+      .replace(/\{phone\}/g, lead.phoneNumbers?.[0] || '')
+      .replace(/\{phoneNumber\}/g, lead.phoneNumbers?.[0] || '')
+      .replace(/\{email\}/g, lead.emails?.[0] || '')
+      .replace(/\{emailAddress\}/g, lead.emails?.[0] || '')
+      .replace(/\{permitType\}/g, lead.permitType.replace(/_/g, ' ').replace(/permits/i, '').trim() || '')
+      .replace(/\{permitNumber\}/g, lead.permitNumber || '')
+      .replace(/\{permitDate\}/g, lead.permitDate ? new Date(lead.permitDate).toLocaleDateString() : '')
+      .replace(/\{description\}/g, lead.description || '')
+      .replace(/\{contractorName\}/g, lead.licensedName || '')
+      .replace(/\{licensedName\}/g, lead.licensedName || '')
+      .replace(/\{contractorLicense\}/g, lead.licensedContractorNumber || '')
+      .replace(/\{licenseNumber\}/g, lead.licensedContractorNumber || '')
+      .replace(/\{contractorPhone\}/g, lead.licensedContact || '')
+      .replace(/\{contractorContact\}/g, lead.licensedContact || '');
   };
 
-  const statusFilters = ['all', 'new', 'contacted', 'responded', 'qualified', 'disqualified', 'converted', 'invalid'];
+  const handleCopyTemplate = async (template: Template) => {
+    if (!selectedLead) return;
+
+    try {
+      const populatedBody = replaceTemplateVariables(template.body, selectedLead);
+      const populatedSubject = template.subject ? replaceTemplateVariables(template.subject, selectedLead) : '';
+
+      const textToCopy = template.subject
+        ? `Subject: ${populatedSubject}\n\n${populatedBody}`
+        : populatedBody;
+
+      await Clipboard.setStringAsync(textToCopy);
+      await incrementTemplateUsage(template.id);
+      setSnackbarMessage(`Template "${template.name}" copied with lead data`);
+      setSnackbarVisible(true);
+      setShowTemplateDialog(false);
+    } catch (error) {
+      console.error('Error copying template:', error);
+      setSnackbarMessage('Failed to copy template');
+      setSnackbarVisible(true);
+    }
+  };
+
+  const renderLeadCard = ({ item }: { item: Lead }) => (
+    <LeadCard
+      lead={item}
+      onPress={() => {
+        if (item.id) {
+          navigation.navigate('LeadDetail', { leadId: item.id });
+        }
+      }}
+      onQuickAction={(action, phone, email) => {
+        if (action === 'template') {
+          setSelectedLead(item);
+          setShowTemplateDialog(true);
+        }
+      }}
+    />
+  );
+
+  // Updated to 6-stage pipeline
+  const statusFilters = ['all', 'new', 'contacted', 'engaged', 'est_sent', 'appointment', 'closing'];
 
   const permitTypes = [
     { id: 'all', label: 'All Permits', icon: 'view-grid' },
@@ -239,7 +268,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               backgroundColor: isSelected
                 ? theme.colors.primary
                 : theme.colors.surface,
-              borderColor: isSelected ? theme.colors.primary : theme.colors.outline,
+              borderColor: isSelected ? theme.colors.primary : currentTheme.border,
             },
             isSelected ? shadows.md : shadows.sm,
           ]}
@@ -298,7 +327,59 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <WebContainer>
+      <WebContainer noPadding>
+        {/* Header with LABEL branding */}
+        <Surface style={[styles.header, { backgroundColor: theme.colors.surface, borderColor: currentTheme.border, marginHorizontal: containerPadding, marginTop: spacing.xs }]}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={[styles.brandLabel, { color: theme.colors.primary }]}>LABEL</Text>
+              <Text style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Pool Leads</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: currentTheme.surface }]}
+                onPress={() => navigation.navigate('Notifications')}
+              >
+                <Icon name="bell" size={20} color={theme.colors.onSurface} />
+                {(stats.thisWeek > 0) && (
+                  <View style={[styles.notificationBadge, { backgroundColor: currentTheme.coral }]}>
+                    <Text style={styles.notificationBadgeText}>{stats.thisWeek}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.avatar, { backgroundColor: theme.colors.primary }]}
+                onPress={() => navigation.navigate('Settings')}
+              >
+                <Text style={styles.avatarText}>
+                  {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Today's Summary Stats */}
+          <View style={styles.summaryStats}>
+            <View style={[styles.summaryStatCard, { backgroundColor: currentTheme.surface }]}>
+              <Text style={[styles.summaryStatValue, { color: currentTheme.badgeNew }]}>{stats.thisWeek}</Text>
+              <Text style={[styles.summaryStatLabel, { color: theme.colors.onSurfaceVariant }]}>New today</Text>
+            </View>
+            <View style={[styles.summaryStatCard, { backgroundColor: currentTheme.surface }]}>
+              <Text style={[styles.summaryStatValue, { color: currentTheme.coral }]}>
+                {leads.filter(l => {
+                  const daysSinceCreated = Math.floor((new Date().getTime() - l.createdDate.getTime()) / (1000 * 60 * 60 * 24));
+                  return daysSinceCreated > 2 && l.status !== 'new';
+                }).length}
+              </Text>
+              <Text style={[styles.summaryStatLabel, { color: theme.colors.onSurfaceVariant }]}>Need follow-up</Text>
+            </View>
+            <View style={[styles.summaryStatCard, { backgroundColor: currentTheme.surface }]}>
+              <Text style={[styles.summaryStatValue, { color: currentTheme.badgeEstSent }]}>{stats.total}</Text>
+              <Text style={[styles.summaryStatLabel, { color: theme.colors.onSurfaceVariant }]}>Total pipeline</Text>
+            </View>
+          </View>
+        </Surface>
+
         {/* Permit Type Selector */}
         {isMobile ? (
           <ScrollView
@@ -310,7 +391,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             {renderPermitTypeCards()}
           </ScrollView>
         ) : (
-          <View style={[styles.permitTypesContainer, { padding: containerPadding, paddingBottom: spacing.lg }]}>
+          <View style={[styles.permitTypesContainer, { padding: containerPadding, paddingBottom: spacing.xs, paddingTop: spacing.xs }]}>
             {renderPermitTypeCards()}
           </View>
         )}
@@ -334,7 +415,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             {
               backgroundColor: theme.colors.surface,
               marginHorizontal: containerPadding,
-              marginBottom: isMobile ? spacing.sm : spacing.lg,
+              marginBottom: spacing.xs,
+              marginTop: spacing.xs,
             },
           ]}
           iconColor={theme.colors.primary}
@@ -342,14 +424,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           inputStyle={isMobile ? styles.searchInputMobile : undefined}
         />
 
-        {/* Status Filters */}
+        {/* Status Filters with Stale Toggle */}
         <View style={[styles.filtersContainer, { paddingHorizontal: isMobile ? 0 : containerPadding }]}>
           {!isMobile && (
             <Text
               variant="labelMedium"
               style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}
             >
-              Status:
+              Filter:
             </Text>
           )}
           <ScrollView
@@ -372,6 +454,23 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 {status.charAt(0).toUpperCase() + status.slice(1)}
               </Chip>
             ))}
+
+            {/* Stale Filter Toggle at end of status filters */}
+            <Chip
+              selected={showStaleOnly}
+              onPress={() => setShowStaleOnly(!showStaleOnly)}
+              compact={isMobile}
+              icon={showStaleOnly ? 'clock-alert' : 'clock-outline'}
+              style={{
+                backgroundColor: showStaleOnly ? currentTheme.coral : theme.colors.surface,
+                borderColor: currentTheme.coral,
+                borderWidth: showStaleOnly ? 0 : 1,
+                marginLeft: spacing.sm,
+              }}
+              textStyle={{ color: showStaleOnly ? '#fff' : currentTheme.coral }}
+            >
+              Stale Only
+            </Chip>
           </ScrollView>
         </View>
 
@@ -425,6 +524,173 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           }
         />
       </WebContainer>
+
+      {/* Template Selection Dialog */}
+      <Portal>
+        <Dialog
+          visible={showTemplateDialog}
+          onDismiss={() => setShowTemplateDialog(false)}
+          style={{ backgroundColor: theme.colors.surface, maxHeight: '80%' }}
+        >
+          <Dialog.Title style={{ fontFamily: 'DMSans_700Bold', fontSize: 18, color: currentTheme.text }}>
+            Select Template
+          </Dialog.Title>
+          <Dialog.Content>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {/* Homeowner Email Templates */}
+              {templates.filter(t => t.category === 'homeowner_email').length > 0 && (
+                <>
+                  <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 11, letterSpacing: 0.8, color: currentTheme.textSecondary, marginBottom: spacing.xs }}>
+                    HOMEOWNER EMAIL
+                  </Text>
+                  {templates
+                    .filter(t => t.category === 'homeowner_email')
+                    .map(template => (
+                      <View
+                        key={template.id}
+                        style={[
+                          styles.templateItem,
+                          {
+                            backgroundColor: currentTheme.surface,
+                            borderColor: currentTheme.border,
+                          },
+                        ]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: currentTheme.text }}>
+                            {template.name}
+                          </Text>
+                          {template.subject && (
+                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 11, color: currentTheme.textSecondary, marginTop: 2 }}>
+                              Subject: {template.subject}
+                            </Text>
+                          )}
+                          <Text
+                            style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: currentTheme.textTertiary, marginTop: spacing.xs }}
+                            numberOfLines={2}
+                          >
+                            {template.body}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                          <TouchableOpacity
+                            style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                            onPress={() => {
+                              if (!selectedLead) return;
+                              const populatedBody = replaceTemplateVariables(template.body, selectedLead);
+                              const populatedSubject = template.subject ? replaceTemplateVariables(template.subject, selectedLead) : '';
+                              const primaryEmail = selectedLead.emails?.[0] || '';
+                              const encodedSubject = encodeURIComponent(populatedSubject);
+                              const encodedBody = encodeURIComponent(populatedBody);
+                              const mailtoURL = `mailto:${primaryEmail}?subject=${encodedSubject}&body=${encodedBody}`;
+                              Linking.openURL(mailtoURL);
+                              setShowTemplateDialog(false);
+                            }}
+                          >
+                            <Icon name="email-open-outline" size={18} color={currentTheme.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                            onPress={() => handleCopyTemplate(template)}
+                          >
+                            <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                </>
+              )}
+
+              {/* Homeowner SMS Templates */}
+              {templates.filter(t => t.category === 'homeowner_text').length > 0 && (
+                <>
+                  <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 11, letterSpacing: 0.8, color: currentTheme.textSecondary, marginTop: spacing.md, marginBottom: spacing.xs }}>
+                    HOMEOWNER TEXT MESSAGE
+                  </Text>
+                  {templates
+                    .filter(t => t.category === 'homeowner_text')
+                    .map(template => (
+                      <View
+                        key={template.id}
+                        style={[
+                          styles.templateItem,
+                          {
+                            backgroundColor: currentTheme.surface,
+                            borderColor: currentTheme.border,
+                          },
+                        ]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: currentTheme.text }}>
+                            {template.name}
+                          </Text>
+                          <Text
+                            style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: currentTheme.textTertiary, marginTop: spacing.xs }}
+                            numberOfLines={2}
+                          >
+                            {template.body}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                          <TouchableOpacity
+                            style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                            onPress={() => {
+                              if (!selectedLead) return;
+                              const populatedBody = replaceTemplateVariables(template.body, selectedLead);
+                              const primaryPhone = selectedLead.phoneNumbers?.[0] || '';
+                              const encodedBody = encodeURIComponent(populatedBody);
+                              const smsURL = Platform.OS === 'ios'
+                                ? `sms:${primaryPhone}&body=${encodedBody}`
+                                : `sms:${primaryPhone}?body=${encodedBody}`;
+                              Linking.openURL(smsURL);
+                              setShowTemplateDialog(false);
+                            }}
+                          >
+                            <Icon name="message-text-outline" size={18} color={currentTheme.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                            onPress={() => handleCopyTemplate(template)}
+                          >
+                            <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                </>
+              )}
+
+              {/* No templates message */}
+              {templates.filter(t => t.category === 'homeowner_email' || t.category === 'homeowner_text').length === 0 && (
+                <View style={{ padding: spacing.lg, alignItems: 'center' }}>
+                  <Icon name="text-box-off-outline" size={48} color={currentTheme.textTertiary} />
+                  <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: currentTheme.textSecondary, marginTop: spacing.md, textAlign: 'center' }}>
+                    No homeowner templates available
+                  </Text>
+                  <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: currentTheme.textTertiary, marginTop: spacing.xs, textAlign: 'center' }}>
+                    Create templates in the Templates tab
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowTemplateDialog(false)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={2000}
+        style={{ backgroundColor: currentTheme.surface }}
+      >
+        <Text style={{ fontFamily: 'DMSans_500Medium', color: currentTheme.text }}>
+          {snackbarMessage}
+        </Text>
+      </Snackbar>
     </View>
   );
 }
@@ -433,26 +699,138 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.xs,
+    borderWidth: 1,
+    ...shadows.sm,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  brandLabel: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 9,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  headerTitle: {
+    fontFamily: 'DMSans_800ExtraBold',
+    fontSize: 20,
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 9,
+    color: '#FFFFFF',
+  },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  summaryStatCard: {
+    flex: 1,
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    paddingVertical: spacing.xs,
+    alignItems: 'center',
+  },
+  summaryStatValue: {
+    fontFamily: 'DMSans_800ExtraBold',
+    fontSize: 18,
+  },
+  summaryStatLabel: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 9,
+    marginTop: 2,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 80,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    ...shadows.sm,
+  },
+  statValue: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 28,
+    lineHeight: 34,
+    marginBottom: spacing.xs,
+  },
+  statLabel: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 12,
+    textAlign: 'center',
+  },
   permitTypesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    gap: spacing.sm,
     justifyContent: 'space-between',
   },
   permitTypesScrollContainer: {
-    gap: spacing.md,           // Increased from sm to md
-    paddingVertical: spacing.md, // Increased padding
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   permitTypesScrollView: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     flexShrink: 0,
   },
   permitTypeCard: {
-    minWidth: 90,              // Slightly larger
+    minWidth: 85,
     alignItems: 'center',
-    padding: spacing.xl,        // More generous padding
-    borderRadius: borderRadius.xl, // More rounded
-    borderWidth: 2,             // Thicker border for prominence
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
     position: 'relative',
     ...Platform.select({
       web: {
@@ -465,11 +843,11 @@ const styles = StyleSheet.create({
     }),
   },
   permitTypeCardMobile: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    minWidth: 85,
-    maxWidth: 90,
-    minHeight: 80,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    minWidth: 75,
+    maxWidth: 80,
+    minHeight: 70,
     justifyContent: 'center',
   },
   countBadge: {
@@ -508,110 +886,44 @@ const styles = StyleSheet.create({
   filtersContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: spacing.lg,   // More breathing room
-    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    paddingTop: 0,
   },
   filters: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   filterLabel: {
-    marginRight: spacing.md,     // More space
+    marginRight: spacing.sm,
     fontWeight: '600',
-    fontSize: 15,                // Slightly larger
+    fontSize: 13,
   },
   filterChip: {
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   countContainer: {
-    paddingBottom: spacing.lg,   // More breathing room
+    paddingBottom: spacing.xs,
+    paddingTop: spacing.xs,
   },
   list: {
     paddingTop: 0,
   },
-  card: {
-    marginBottom: spacing.xl,    // More space between cards
-    borderRadius: borderRadius.xl, // More rounded for premium feel
-    padding: spacing.xl,          // More generous padding
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-    ...Platform.select({
-      web: {
-        transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
-        cursor: 'pointer',
-        ':hover': {
-          transform: 'translateY(-1px)',
-        },
-      },
-    }),
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,    // More space
-  },
-  cardHeaderLeft: {
+  templateItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-  },
-  cardIcon: {
-    marginRight: spacing.md,     // More space
-  },
-  recordId: {
-    fontWeight: '600',
-    fontSize: 13,                // Explicit font size
-    letterSpacing: 0.5,          // Better readability
-    textTransform: 'uppercase',
-  },
-  name: {
-    marginBottom: spacing.md,
-    fontWeight: '700',           // Bolder
-    fontSize: 18,                // Larger, more prominent
-    lineHeight: 24,
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing.xl,    // More space
-    gap: spacing.md,             // Larger gap
-  },
-  address: {
-    flex: 1,
-    lineHeight: 22,              // Better readability
-    fontSize: 15,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: spacing.md,      // Add top padding
-    borderTopWidth: 1,           // Add subtle divider
-    borderTopColor: 'rgba(0,0,0,0.04)',
-  },
-  footerLeft: {
-    flex: 1,
-  },
-  footerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  footerBadge: {
-    backgroundColor: 'rgba(0, 122, 255, 0.08)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    padding: spacing.md,
     borderRadius: borderRadius.md,
-    alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(0, 122, 255, 0.12)',
+    marginBottom: spacing.sm,
+    ...shadows.sm,
   },
-  footerBadgeText: {
-    fontWeight: '700',           // Bolder
-    fontSize: 10,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+  templateActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

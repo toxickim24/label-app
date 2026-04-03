@@ -3,7 +3,7 @@
  * Shows complete information about a lead with edit capability
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Linking, Platform, Alert, TouchableOpacity } from 'react-native';
 import {
   Text,
@@ -18,16 +18,20 @@ import {
   Snackbar,
   TextInput,
   Menu,
+  Dialog,
+  Portal,
 } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { useLeadsStore } from '../../store';
-import { getStatusColor, spacing, borderRadius, shadows } from '../../theme';
-import { Lead, LeadStatus } from '../../types';
+import { useLeadsStore, useAuthStore } from '../../store';
+import { getStatusColor, lightTheme, darkTheme, spacing, borderRadius, shadows } from '../../theme';
+import { Lead, LeadStatus, StatusChange, Template } from '../../types';
 import SendMessageDialog from '../../components/SendMessageDialog';
 import WebContainer from '../../components/WebContainer';
+import { subscribeToTemplates, incrementTemplateUsage } from '../../services/templatesService';
 import { useResponsive } from '../../hooks/useResponsive';
 import EmptyState from '../../components/EmptyState';
+import { StatusBadge } from '../../components/StatusBadge';
 
 interface LeadDetailScreenProps {
   route: {
@@ -38,23 +42,25 @@ interface LeadDetailScreenProps {
   navigation: any;
 }
 
-const STATUS_OPTIONS: { value: LeadStatus; label: string; icon: string }[] = [
-  { value: 'new', label: 'New', icon: 'new-box' },
-  { value: 'contacted', label: 'Contacted', icon: 'phone-check' },
-  { value: 'responded', label: 'Responded', icon: 'message-reply' },
-  { value: 'qualified', label: 'Qualified', icon: 'check-circle' },
-  { value: 'disqualified', label: 'Disqualified', icon: 'close-circle' },
-  { value: 'converted', label: 'Converted', icon: 'trophy' },
-  { value: 'invalid', label: 'Invalid', icon: 'alert-circle' },
+// Updated to 6-stage pipeline
+const STATUS_OPTIONS: { value: LeadStatus; label: string; color: string; bg: string }[] = [
+  { value: 'new', label: 'New', color: '#34d399', bg: '#34d39920' },
+  { value: 'contacted', label: 'Contacted', color: '#818cf8', bg: '#818cf820' },
+  { value: 'engaged', label: 'Engaged', color: '#fbbf24', bg: '#fbbf2420' },
+  { value: 'est_sent', label: 'Est. Sent', color: '#60a5fa', bg: '#60a5fa20' },
+  { value: 'appointment', label: 'Appointment', color: '#a78bfa', bg: '#a78bfa20' },
+  { value: 'closing', label: 'Closing', color: '#f472b6', bg: '#f472b620' },
 ];
 
 export default function LeadDetailScreen({ route, navigation }: LeadDetailScreenProps) {
   const theme = useTheme();
+  const currentTheme = theme.dark ? darkTheme : lightTheme;
   const { isMobile, containerPadding } = useResponsive();
   const { leadId } = route.params || {};
   const leads = useLeadsStore((state) => state.leads);
   const updateLead = useLeadsStore((state) => state.updateLead);
   const lead = leadId ? leads.find((l) => l.id === leadId) : null;
+  const user = useAuthStore((state) => state.user);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
@@ -64,7 +70,13 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
   const [showMessageDialog, setShowMessageDialog] = useState(false);
   const [messageType, setMessageType] = useState<'sms' | 'email'>('sms');
   const [selectedRecipient, setSelectedRecipient] = useState<string>('');
+  const [recipientType, setRecipientType] = useState<'homeowner' | 'contractor'>('homeowner');
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
+  const [showNoteDialog, setShowNoteDialog] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [templateDialogMode, setTemplateDialogMode] = useState<'homeowner' | 'contractor'>('homeowner');
+  const [templates, setTemplates] = useState<Template[]>([]);
 
   // Debug logging
   if (lead) {
@@ -75,6 +87,19 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
       emails: lead.emails,
     });
   }
+
+  // Subscribe to templates for this lead's permit type
+  useEffect(() => {
+    if (!lead) return;
+
+    console.log(`🔍 Subscribing to templates for permit type: ${lead.permitType}`);
+    const unsubscribe = subscribeToTemplates(lead.permitType, (loadedTemplates) => {
+      setTemplates(loadedTemplates);
+      console.log(`📋 Loaded ${loadedTemplates.length} templates for ${lead.permitType}:`, loadedTemplates.map(t => ({ id: t.id, name: t.name, category: t.category })));
+    });
+
+    return () => unsubscribe();
+  }, [lead]);
 
   if (!lead) {
     return (
@@ -153,15 +178,17 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
     Linking.openURL(phoneUrl);
   };
 
-  const handleSMS = (phone: string) => {
+  const handleSMS = (phone: string, recipient: 'homeowner' | 'contractor' = 'homeowner') => {
     setMessageType('sms');
     setSelectedRecipient(phone);
+    setRecipientType(recipient);
     setShowMessageDialog(true);
   };
 
-  const handleEmail = (email: string) => {
+  const handleEmail = (email: string, recipient: 'homeowner' | 'contractor' = 'homeowner') => {
     setMessageType('email');
     setSelectedRecipient(email);
+    setRecipientType(recipient);
     setShowMessageDialog(true);
   };
 
@@ -169,6 +196,73 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
     await Clipboard.setStringAsync(text);
     setSnackbarMessage(`${label} copied to clipboard`);
     setSnackbarVisible(true);
+  };
+
+  const replaceTemplateVariables = (text: string): string => {
+    if (!lead) return text;
+
+    // Replace all template variables with actual lead data
+    return text
+      // Name fields
+      .replace(/\{firstName\}/g, lead.firstName || '')
+      .replace(/\{lastName\}/g, lead.lastName || '')
+      .replace(/\{fullName\}/g, lead.fullName || '')
+
+      // Address fields
+      .replace(/\{address\}/g, lead.fullAddress || '')
+      .replace(/\{fullAddress\}/g, lead.fullAddress || '')
+      .replace(/\{street\}/g, lead.street || '')
+      .replace(/\{city\}/g, lead.city || '')
+      .replace(/\{state\}/g, lead.state || '')
+      .replace(/\{zipCode\}/g, lead.zipCode || '')
+      .replace(/\{zip\}/g, lead.zipCode || '')
+      .replace(/\{county\}/g, lead.county || '')
+
+      // Contact fields
+      .replace(/\{phone\}/g, lead.phoneNumbers?.[0] || '')
+      .replace(/\{phoneNumber\}/g, lead.phoneNumbers?.[0] || '')
+      .replace(/\{email\}/g, lead.emails?.[0] || '')
+      .replace(/\{emailAddress\}/g, lead.emails?.[0] || '')
+
+      // Permit fields
+      .replace(/\{permitType\}/g, lead.permitType.replace(/_/g, ' ').replace(/permits/i, '').trim() || '')
+      .replace(/\{permitNumber\}/g, lead.permitNumber || '')
+      .replace(/\{permitDate\}/g, lead.permitDate ? new Date(lead.permitDate).toLocaleDateString() : '')
+      .replace(/\{description\}/g, lead.description || '')
+
+      // Contractor fields
+      .replace(/\{contractorName\}/g, lead.licensedName || '')
+      .replace(/\{licensedName\}/g, lead.licensedName || '')
+      .replace(/\{contractorLicense\}/g, lead.licensedContractorNumber || '')
+      .replace(/\{licenseNumber\}/g, lead.licensedContractorNumber || '')
+      .replace(/\{contractorPhone\}/g, lead.licensedContact || '')
+      .replace(/\{contractorContact\}/g, lead.licensedContact || '');
+  };
+
+  const handleCopyTemplate = async (template: Template) => {
+    try {
+      // Replace variables in body and subject
+      const populatedBody = replaceTemplateVariables(template.body);
+      const populatedSubject = template.subject ? replaceTemplateVariables(template.subject) : '';
+
+      // If email template with subject, combine them
+      const textToCopy = template.subject
+        ? `Subject: ${populatedSubject}\n\n${populatedBody}`
+        : populatedBody;
+
+      await Clipboard.setStringAsync(textToCopy);
+      await incrementTemplateUsage(template.id);
+      setSnackbarMessage(`Template "${template.name}" copied with lead data`);
+      setSnackbarVisible(true);
+      setShowTemplateDialog(false);
+    } catch (error) {
+      console.error('Error copying template:', error);
+      if (Platform.OS === 'web') {
+        window.alert('Failed to copy template');
+      } else {
+        Alert.alert('Error', 'Failed to copy template');
+      }
+    }
   };
 
   const formatDate = (date: Date) => {
@@ -179,799 +273,920 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
     return STATUS_OPTIONS.find(opt => opt.value === status) || STATUS_OPTIONS[0];
   };
 
+  const handleAddNote = async () => {
+    if (!newNote.trim()) {
+      setShowNoteDialog(false);
+      setNewNote('');
+      return;
+    }
+
+    try {
+      const timestamp = new Date().toLocaleString();
+      const noteWithTimestamp = `[${timestamp}] ${newNote.trim()}`;
+      const updatedNotes = lead?.notes
+        ? `${lead.notes}\n\n${noteWithTimestamp}`
+        : noteWithTimestamp;
+
+      await updateLead(leadId, { notes: updatedNotes });
+      setSnackbarMessage('Note added successfully');
+      setSnackbarVisible(true);
+      setShowNoteDialog(false);
+      setNewNote('');
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to add note';
+      if (Platform.OS === 'web') {
+        window.alert(`Error: ${errorMessage}`);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
+    }
+  };
+
+  const handleMarkAsContacted = async () => {
+    try {
+      const now = new Date();
+
+      const updates: any = {
+        lastContactedAt: now,
+        lastContactedBy: user?.email || 'unknown',
+        contactedCount: (lead?.contactedCount || 0) + 1,
+      };
+
+      // Auto-advance "new" leads to "contacted" status
+      if (lead?.status === 'new') {
+        updates.status = 'contacted';
+
+        // Add to status history
+        const statusChange: StatusChange = {
+          from: 'new',
+          to: 'contacted',
+          changedAt: now,
+          changedBy: user?.email || 'unknown',
+        };
+        updates.statusHistory = [...(lead.statusHistory || []), statusChange];
+      }
+
+      await updateLead(leadId, updates);
+
+      setSnackbarMessage(
+        lead?.status === 'new'
+          ? 'Lead marked as contacted and status updated'
+          : 'Lead marked as contacted'
+      );
+      setSnackbarVisible(true);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to mark as contacted';
+      if (Platform.OS === 'web') {
+        window.alert(`Error: ${errorMessage}`);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <WebContainer maxWidth="lg">
         <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Back Button */}
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={20} color={theme.colors.onSurfaceVariant} />
+            <Text style={[styles.backButtonText, { color: theme.colors.onSurfaceVariant }]}>
+              Back to leads
+            </Text>
+          </TouchableOpacity>
+
           {/* Header */}
-          <Surface
-            style={[styles.header, { backgroundColor: theme.colors.surface }, shadows.sm]}
-          >
-          <View style={styles.headerContent}>
-            <View style={{ flex: 1 }}>
-              {isEditing ? (
-                <TextInput
-                  value={editedLead?.fullName}
-                  onChangeText={(text) => updateField('fullName', text)}
-                  mode="outlined"
-                  label="Full Name"
-                  dense
-                  style={{ marginBottom: spacing.xs }}
-                />
-              ) : (
-                <Text variant="headlineSmall" style={styles.leadName}>
-                  {currentLead.fullName}
+          <View style={styles.headerSection}>
+            <View style={styles.headerContent}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.recordId, { color: theme.colors.onSurfaceVariant }]}>
+                  {currentLead.recordId}
                 </Text>
+                {isEditing ? (
+                  <TextInput
+                    value={editedLead?.fullName || ''}
+                    onChangeText={(text) => updateField('fullName', text)}
+                    mode="outlined"
+                    label="Full Name"
+                    dense
+                    style={{ marginTop: spacing.xs }}
+                  />
+                ) : (
+                  <Text style={[styles.leadName, { color: theme.colors.onSurface }]}>
+                    {currentLead.fullName || 'Unknown'}
+                  </Text>
+                )}
+                <View style={styles.addressRow}>
+                  <Icon name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+                  <Text style={[styles.address, { color: theme.colors.onSurfaceVariant }]}>
+                    {currentLead.fullAddress || currentLead.city && currentLead.state
+                      ? `${currentLead.city}, ${currentLead.state} ${currentLead.zipCode || ''}`
+                      : 'No address'}
+                  </Text>
+                </View>
+              </View>
+              <StatusBadge status={currentLead.status} size="medium" />
+            </View>
+
+            {/* Edit/Save/Cancel Buttons */}
+            <View style={styles.editActions}>
+              {isEditing ? (
+                <>
+                  <Button
+                    mode="outlined"
+                    onPress={handleCancel}
+                    disabled={isSaving}
+                    style={{ marginRight: spacing.sm }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={handleSave}
+                    loading={isSaving}
+                    disabled={isSaving}
+                    icon="content-save"
+                  >
+                    Save
+                  </Button>
+                </>
+              ) : (
+                <Button mode="contained-tonal" onPress={handleEdit} icon="pencil">
+                  Edit Lead
+                </Button>
               )}
-              <Text variant="bodyMedium" style={{ color: theme.colors.secondary }}>
-                {currentLead.recordId}
-              </Text>
             </View>
-            <Chip
-              mode="flat"
-              icon={getStatusOption(currentLead.status).icon}
-              style={{
-                backgroundColor: getStatusColor(currentLead.status, theme.dark),
-              }}
-              textStyle={{ color: '#fff', fontSize: 12, fontWeight: '600' }}
-            >
-              {currentLead.status.toUpperCase()}
-            </Chip>
           </View>
-          {/* Edit/Save/Cancel Buttons */}
-          <View style={styles.editActions}>
-            {isEditing ? (
-              <>
-                <Button
-                  mode="outlined"
-                  onPress={handleCancel}
-                  disabled={isSaving}
-                  style={{ marginRight: spacing.sm }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={handleSave}
-                  loading={isSaving}
-                  disabled={isSaving}
-                  icon="content-save"
-                >
-                  Save
-                </Button>
-              </>
-            ) : (
-              <Button mode="contained-tonal" onPress={handleEdit} icon="pencil">
-                Edit Lead
-              </Button>
-            )}
-          </View>
-        </Surface>
 
-          {/* Quick Actions */}
+          {/* Status Pipeline - 6 Stage Selector */}
+          {!isEditing && (
+            <View style={styles.statusPipeline}>
+              {STATUS_OPTIONS.map((status) => (
+                <TouchableOpacity
+                  key={status.value}
+                  style={[
+                    styles.statusButton,
+                    {
+                      backgroundColor: currentLead.status === status.value ? status.bg : theme.colors.surface,
+                      borderColor: currentLead.status === status.value ? status.color : currentTheme.border,
+                    },
+                  ]}
+                  onPress={async () => {
+                    if (!isEditing && currentLead.status !== status.value) {
+                      const newStatusChange: StatusChange = {
+                        from: currentLead.status,
+                        to: status.value,
+                        changedAt: new Date(),
+                        changedBy: user?.email || 'unknown',
+                      };
+                      const updatedStatusHistory = [...(currentLead.statusHistory || []), newStatusChange];
+                      await updateLead(leadId, {
+                        ...currentLead,
+                        status: status.value,
+                        statusHistory: updatedStatusHistory,
+                      });
+                      setSnackbarMessage(`Status updated to ${status.label}`);
+                      setSnackbarVisible(true);
+                    }
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.statusButtonText,
+                      {
+                        color: currentLead.status === status.value ? status.color : theme.colors.onSurfaceVariant,
+                      },
+                    ]}
+                  >
+                    {status.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+
+          {/* Homeowner Section */}
           <Surface
             style={[
               styles.card,
               {
                 backgroundColor: theme.colors.surface,
                 borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
+                borderColor: currentTheme.border,
               },
               shadows.sm,
             ]}
           >
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Quick Actions
+            <Text style={[styles.sectionLabel, { color: currentTheme.primary }]}>
+              HOMEOWNER
             </Text>
-            <View style={[styles.actionsContainer, isMobile && styles.actionsContainerMobile]}>
-              <Button
-                mode="elevated"
-                icon="phone"
-                onPress={() => handleCall(currentLead.phoneNumbers?.[0] || '')}
-                style={[styles.actionButton, isMobile && styles.actionButtonMobile]}
-                disabled={!currentLead.phoneNumbers?.[0]}
-              >
-                Call
-              </Button>
-              <Button
-                mode="elevated"
-                icon="message"
-                onPress={() => handleSMS(currentLead.phoneNumbers?.[0] || '')}
-                style={[styles.actionButton, isMobile && styles.actionButtonMobile]}
-                disabled={!currentLead.phoneNumbers?.[0]}
-              >
-                SMS
-              </Button>
-              <Button
-                mode="elevated"
-                icon="email"
-                onPress={() => handleEmail(currentLead.emails?.[0] || '')}
-                style={[styles.actionButton, isMobile && styles.actionButtonMobile]}
-                disabled={!currentLead.emails?.[0]}
-              >
-                Email
-              </Button>
-            </View>
-          </Surface>
-
-          {/* Contact Information */}
-          <Surface
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
-              },
-              shadows.sm,
-            ]}
-          >
             <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Contact Information
+              {currentLead.fullName || 'Not found'}
             </Text>
 
-            {isEditing ? (
-              <>
+            {/* Name Fields */}
+            {isEditing && (
+              <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
                 <TextInput
-                  label="First Name"
-                  value={editedLead?.firstName}
+                  value={editedLead?.firstName || ''}
                   onChangeText={(text) => updateField('firstName', text)}
                   mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="account" />}
+                  label="First Name"
+                  dense
+                  style={{ flex: 1 }}
                 />
                 <TextInput
-                  label="Last Name"
-                  value={editedLead?.lastName}
+                  value={editedLead?.lastName || ''}
                   onChangeText={(text) => updateField('lastName', text)}
                   mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="account" />}
+                  label="Last Name"
+                  dense
+                  style={{ flex: 1 }}
                 />
-                <TextInput
-                  label="Primary Phone"
-                  value={editedLead?.phoneNumbers?.[0] || ''}
-                  onChangeText={(text) => updatePhoneNumber(0, text)}
-                  mode="outlined"
-                  style={styles.input}
-                  keyboardType="phone-pad"
-                  left={<TextInput.Icon icon="phone" />}
-                />
-                <TextInput
-                  label="Secondary Phone"
-                  value={editedLead?.phoneNumbers?.[1] || ''}
-                  onChangeText={(text) => updatePhoneNumber(1, text)}
-                  mode="outlined"
-                  style={styles.input}
-                  keyboardType="phone-pad"
-                  left={<TextInput.Icon icon="phone" />}
-                />
-                <TextInput
-                  label="Tertiary Phone"
-                  value={editedLead?.phoneNumbers?.[2] || ''}
-                  onChangeText={(text) => updatePhoneNumber(2, text)}
-                  mode="outlined"
-                  style={styles.input}
-                  keyboardType="phone-pad"
-                  left={<TextInput.Icon icon="phone" />}
-                />
-                <TextInput
-                  label="Primary Email"
-                  value={editedLead?.emails?.[0] || ''}
-                  onChangeText={(text) => updateEmail(0, text)}
-                  mode="outlined"
-                  style={styles.input}
-                  keyboardType="email-address"
-                  left={<TextInput.Icon icon="email" />}
-                />
-                <TextInput
-                  label="Secondary Email"
-                  value={editedLead?.emails?.[1] || ''}
-                  onChangeText={(text) => updateEmail(1, text)}
-                  mode="outlined"
-                  style={styles.input}
-                  keyboardType="email-address"
-                  left={<TextInput.Icon icon="email" />}
-                />
-                <TextInput
-                  label="Tertiary Email"
-                  value={editedLead?.emails?.[2] || ''}
-                  onChangeText={(text) => updateEmail(2, text)}
-                  mode="outlined"
-                  style={styles.input}
-                  keyboardType="email-address"
-                  left={<TextInput.Icon icon="email" />}
-                />
-
-                <Divider style={{ marginVertical: spacing.md }} />
-
-                {/* Status Dropdown */}
-                <Text variant="labelLarge" style={{ marginBottom: spacing.xs, marginTop: spacing.sm }}>
-                  Lead Status
-                </Text>
-                <Menu
-                  visible={statusMenuVisible}
-                  onDismiss={() => setStatusMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setStatusMenuVisible(true)}
-                      style={{
-                        borderRadius: 4,
-                        borderWidth: 1,
-                        borderColor: theme.colors.outline,
-                        backgroundColor: theme.colors.surface,
-                      }}
-                    >
-                      <List.Item
-                        title={getStatusOption(editedLead?.status || 'new').label}
-                        left={(props) => <List.Icon {...props} icon={getStatusOption(editedLead?.status || 'new').icon} />}
-                        right={(props) => <List.Icon {...props} icon="chevron-down" />}
-                        style={{ paddingVertical: 0 }}
-                      />
-                    </TouchableOpacity>
-                  }
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <Menu.Item
-                      key={option.value}
-                      leadingIcon={option.icon}
-                      onPress={() => {
-                        updateField('status', option.value);
-                        setStatusMenuVisible(false);
-                      }}
-                      title={option.label}
-                      style={{
-                        backgroundColor: editedLead?.status === option.value ? theme.colors.surfaceVariant : 'transparent'
-                      }}
-                    />
-                  ))}
-                </Menu>
-              </>
-            ) : (
-              <>
-                {/* Primary Phone */}
-                {isMobile ? (
-                  <View style={styles.contactItemMobile}>
-                    <View style={styles.contactInfoRow}>
-                      <Icon name="phone" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
-                      <View style={{ flex: 1 }}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
-                          Primary Phone
-                        </Text>
-                        <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
-                          {currentLead.phoneNumbers?.[0] || ''}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.contactActionsMobile}>
-                      <Button mode="outlined" icon="phone" onPress={() => handleCall(currentLead.phoneNumbers?.[0] || '')} style={{ flex: 1 }}>
-                        Call
-                      </Button>
-                      <Button mode="outlined" icon="message" onPress={() => handleSMS(currentLead.phoneNumbers?.[0] || '')} style={{ flex: 1 }}>
-                        SMS
-                      </Button>
-                      <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.phoneNumbers?.[0] || '', 'Phone number')} style={{ flex: 1 }}>
-                        Copy
-                      </Button>
-                    </View>
-                  </View>
-                ) : (
-                  <List.Item
-                    title="Primary Phone"
-                    description={currentLead.phoneNumbers?.[0] || ''}
-                    left={(props) => <List.Icon {...props} icon="phone" />}
-                    right={(props) => (
-                      <View style={styles.contactActions}>
-                        <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[0] || '')} />
-                        <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[0] || '')} />
-                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[0] || '', 'Phone number')} />
-                      </View>
-                    )}
-                  />
-                )}
-
-                {/* Secondary Phone */}
-                {currentLead.phoneNumbers?.[1] && (
-                  isMobile ? (
-                    <View style={styles.contactItemMobile}>
-                      <View style={styles.contactInfoRow}>
-                        <Icon name="phone" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
-                        <View style={{ flex: 1 }}>
-                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
-                            Secondary Phone
-                          </Text>
-                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
-                            {currentLead.phoneNumbers?.[1]}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.contactActionsMobile}>
-                        <Button mode="outlined" icon="phone" onPress={() => handleCall(currentLead.phoneNumbers?.[1]!)} style={{ flex: 1 }}>
-                          Call
-                        </Button>
-                        <Button mode="outlined" icon="message" onPress={() => handleSMS(currentLead.phoneNumbers?.[1]!)} style={{ flex: 1 }}>
-                          SMS
-                        </Button>
-                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.phoneNumbers?.[1]!, 'Phone number')} style={{ flex: 1 }}>
-                          Copy
-                        </Button>
-                      </View>
-                    </View>
-                  ) : (
-                    <List.Item
-                      title="Secondary Phone"
-                      description={currentLead.phoneNumbers?.[1]}
-                      left={(props) => <List.Icon {...props} icon="phone" />}
-                      right={(props) => (
-                        <View style={styles.contactActions}>
-                          <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[1]!)} />
-                          <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[1]!)} />
-                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[1]!, 'Phone number')} />
-                        </View>
-                      )}
-                    />
-                  )
-                )}
-
-                {/* Tertiary Phone */}
-                {currentLead.phoneNumbers?.[2] && (
-                  isMobile ? (
-                    <View style={styles.contactItemMobile}>
-                      <View style={styles.contactInfoRow}>
-                        <Icon name="phone" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
-                        <View style={{ flex: 1 }}>
-                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
-                            Tertiary Phone
-                          </Text>
-                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
-                            {currentLead.phoneNumbers?.[2]}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.contactActionsMobile}>
-                        <Button mode="outlined" icon="phone" onPress={() => handleCall(currentLead.phoneNumbers?.[2]!)} style={{ flex: 1 }}>
-                          Call
-                        </Button>
-                        <Button mode="outlined" icon="message" onPress={() => handleSMS(currentLead.phoneNumbers?.[2]!)} style={{ flex: 1 }}>
-                          SMS
-                        </Button>
-                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.phoneNumbers?.[2]!, 'Phone number')} style={{ flex: 1 }}>
-                          Copy
-                        </Button>
-                      </View>
-                    </View>
-                  ) : (
-                    <List.Item
-                      title="Tertiary Phone"
-                      description={currentLead.phoneNumbers?.[2]}
-                      left={(props) => <List.Icon {...props} icon="phone" />}
-                      right={(props) => (
-                        <View style={styles.contactActions}>
-                          <IconButton icon="phone" size={20} onPress={() => handleCall(currentLead.phoneNumbers?.[2]!)} />
-                          <IconButton icon="message" size={20} onPress={() => handleSMS(currentLead.phoneNumbers?.[2]!)} />
-                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.phoneNumbers?.[2]!, 'Phone number')} />
-                        </View>
-                      )}
-                    />
-                  )
-                )}
-
-                <Divider style={styles.divider} />
-
-                {/* Primary Email */}
-                {isMobile ? (
-                  <View style={styles.contactItemMobile}>
-                    <View style={styles.contactInfoRow}>
-                      <Icon name="email" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
-                      <View style={{ flex: 1 }}>
-                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
-                          Primary Email
-                        </Text>
-                        <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
-                          {currentLead.emails?.[0] || ''}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.contactActionsMobile}>
-                      <Button mode="outlined" icon="email" onPress={() => handleEmail(currentLead.emails?.[0] || '')} style={{ flex: 1 }}>
-                        Email
-                      </Button>
-                      <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.emails?.[0] || '', 'Email address')} style={{ flex: 1 }}>
-                        Copy
-                      </Button>
-                    </View>
-                  </View>
-                ) : (
-                  <List.Item
-                    title="Primary Email"
-                    description={currentLead.emails?.[0] || ''}
-                    left={(props) => <List.Icon {...props} icon="email" />}
-                    right={(props) => (
-                      <View style={styles.contactActions}>
-                        <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[0] || '')} />
-                        <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[0] || '', 'Email address')} />
-                      </View>
-                    )}
-                  />
-                )}
-
-                {/* Secondary Email */}
-                {currentLead.emails?.[1] && (
-                  isMobile ? (
-                    <View style={styles.contactItemMobile}>
-                      <View style={styles.contactInfoRow}>
-                        <Icon name="email" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
-                        <View style={{ flex: 1 }}>
-                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
-                            Secondary Email
-                          </Text>
-                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
-                            {currentLead.emails?.[1]}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.contactActionsMobile}>
-                        <Button mode="outlined" icon="email" onPress={() => handleEmail(currentLead.emails?.[1]!)} style={{ flex: 1 }}>
-                          Email
-                        </Button>
-                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.emails?.[1]!, 'Email address')} style={{ flex: 1 }}>
-                          Copy
-                        </Button>
-                      </View>
-                    </View>
-                  ) : (
-                    <List.Item
-                      title="Secondary Email"
-                      description={currentLead.emails?.[1]}
-                      left={(props) => <List.Icon {...props} icon="email" />}
-                      right={(props) => (
-                        <View style={styles.contactActions}>
-                          <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[1]!)} />
-                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[1]!, 'Email address')} />
-                        </View>
-                      )}
-                    />
-                  )
-                )}
-
-                {/* Tertiary Email */}
-                {currentLead.emails?.[2] && (
-                  isMobile ? (
-                    <View style={styles.contactItemMobile}>
-                      <View style={styles.contactInfoRow}>
-                        <Icon name="email" size={24} color={theme.colors.onSurfaceVariant} style={{ marginRight: spacing.md }} />
-                        <View style={{ flex: 1 }}>
-                          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: spacing.xs }}>
-                            Tertiary Email
-                          </Text>
-                          <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }} selectable>
-                            {currentLead.emails?.[2]}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.contactActionsMobile}>
-                        <Button mode="outlined" icon="email" onPress={() => handleEmail(currentLead.emails?.[2]!)} style={{ flex: 1 }}>
-                          Email
-                        </Button>
-                        <Button mode="outlined" icon="content-copy" onPress={() => handleCopy(currentLead.emails?.[2]!, 'Email address')} style={{ flex: 1 }}>
-                          Copy
-                        </Button>
-                      </View>
-                    </View>
-                  ) : (
-                    <List.Item
-                      title="Tertiary Email"
-                      description={currentLead.emails?.[2]}
-                      left={(props) => <List.Icon {...props} icon="email" />}
-                      right={(props) => (
-                        <View style={styles.contactActions}>
-                          <IconButton icon="email" size={20} onPress={() => handleEmail(currentLead.emails?.[2]!)} />
-                          <IconButton icon="content-copy" size={20} onPress={() => handleCopy(currentLead.emails?.[2]!, 'Email address')} />
-                        </View>
-                      )}
-                    />
-                  )
-                )}
-              </>
-            )}
-          </Surface>
-
-          {/* Property Information */}
-          <Surface
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
-              },
-              shadows.sm,
-            ]}
-          >
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Property Information
-            </Text>
-
-            {isEditing ? (
-              <>
-                <TextInput
-                  label="Full Address"
-                  value={editedLead?.fullAddress}
-                  onChangeText={(text) => updateField('fullAddress', text)}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="map-marker" />}
-                />
-                <TextInput
-                  label="Street"
-                  value={editedLead?.street}
-                  onChangeText={(text) => updateField('street', text)}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="road" />}
-                />
-                <TextInput
-                  label="City"
-                  value={editedLead?.city}
-                  onChangeText={(text) => updateField('city', text)}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="city" />}
-                />
-                <TextInput
-                  label="State"
-                  value={editedLead?.state}
-                  onChangeText={(text) => updateField('state', text)}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="flag" />}
-                />
-                <TextInput
-                  label="ZIP Code"
-                  value={editedLead?.zipCode}
-                  onChangeText={(text) => updateField('zipCode', text)}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="mailbox" />}
-                />
-                <TextInput
-                  label="County"
-                  value={editedLead?.county}
-                  onChangeText={(text) => updateField('county', text)}
-                  mode="outlined"
-                  style={styles.input}
-                  left={<TextInput.Icon icon="map" />}
-                />
-              </>
-            ) : (
-              <>
-                <List.Item
-                  title="Full Address"
-                  description={currentLead.fullAddress}
-                  left={(props) => <List.Icon {...props} icon="map-marker" />}
-                />
-                <List.Item
-                  title="Street"
-                  description={currentLead.street}
-                  left={(props) => <List.Icon {...props} icon="road" />}
-                />
-                <List.Item
-                  title="City"
-                  description={currentLead.city}
-                  left={(props) => <List.Icon {...props} icon="city" />}
-                />
-                <List.Item
-                  title="State"
-                  description={currentLead.state}
-                  left={(props) => <List.Icon {...props} icon="flag" />}
-                />
-                <List.Item
-                  title="ZIP Code"
-                  description={currentLead.zipCode || 'N/A'}
-                  left={(props) => <List.Icon {...props} icon="mailbox" />}
-                />
-                <List.Item
-                  title="County"
-                  description={currentLead.county || 'N/A'}
-                  left={(props) => <List.Icon {...props} icon="map" />}
-                />
-              </>
-            )}
-          </Surface>
-
-          {/* Permit Information */}
-          <Surface
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
-              },
-              shadows.sm,
-            ]}
-          >
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Permit Information
-            </Text>
-
-            <List.Item
-              title="Permit Type"
-              description={currentLead.permitType.replace(/_/g, ' ').toUpperCase()}
-              left={(props) => <List.Icon {...props} icon="file-document" />}
-            />
-            {currentLead.permitId && (
-              <List.Item
-                title="Permit ID"
-                description={currentLead.permitId}
-                left={(props) => <List.Icon {...props} icon="identifier" />}
-              />
-            )}
-          </Surface>
-
-          {/* Communication History */}
-          <Surface
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
-              },
-              shadows.sm,
-            ]}
-          >
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Communication History
-            </Text>
-
-            {currentLead.communications.length > 0 ? (
-              currentLead.communications.map((comm, index) => (
-                <List.Item
-                  key={index}
-                  title={comm.type.toUpperCase()}
-                  description={`${comm.deliveryStatus} - ${formatDate(comm.sentAt)}`}
-                  left={(props) => (
-                    <List.Icon
-                      {...props}
-                      icon={comm.type === 'sms' ? 'message' : 'email'}
-                    />
-                  )}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyStateContainer}>
-                <Icon name="email-off-outline" size={48} color={theme.colors.onSurfaceVariant} style={{ opacity: 0.5 }} />
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: spacing.md, textAlign: 'center' }}>
-                  No communications yet
-                </Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: spacing.xs, textAlign: 'center', opacity: 0.7 }}>
-                  Send an SMS or email to start communicating with this lead
-                </Text>
               </View>
             )}
 
-            {currentLead.lastContactedAt && (
+            {/* Address */}
+            {isEditing ? (
               <>
-                <Divider style={styles.divider} />
-                <List.Item
-                  title="Last Contacted"
-                  description={formatDate(currentLead.lastContactedAt)}
-                  left={(props) => <List.Icon {...props} icon="clock" />}
+                <TextInput
+                  value={editedLead?.fullAddress || ''}
+                  onChangeText={(text) => updateField('fullAddress', text)}
+                  mode="outlined"
+                  label="Full Address"
+                  dense
+                  style={{ marginBottom: spacing.sm }}
                 />
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
+                  <TextInput
+                    value={editedLead?.city || ''}
+                    onChangeText={(text) => updateField('city', text)}
+                    mode="outlined"
+                    label="City"
+                    dense
+                    style={{ flex: 1 }}
+                  />
+                  <TextInput
+                    value={editedLead?.state || ''}
+                    onChangeText={(text) => updateField('state', text)}
+                    mode="outlined"
+                    label="State"
+                    dense
+                    style={{ flex: 1 }}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
+                  <TextInput
+                    value={editedLead?.zipCode || ''}
+                    onChangeText={(text) => updateField('zipCode', text)}
+                    mode="outlined"
+                    label="Zip Code"
+                    dense
+                    style={{ flex: 1 }}
+                  />
+                  <TextInput
+                    value={editedLead?.county || ''}
+                    onChangeText={(text) => updateField('county', text)}
+                    mode="outlined"
+                    label="County"
+                    dense
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </>
+            ) : (
+              currentLead.fullAddress && (
+                <View style={styles.contactItem}>
+                  <View style={styles.contactInfo}>
+                    <Icon name="map-marker" size={16} color={currentTheme.textSecondary} style={{ marginRight: spacing.xs }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.contactValue, { color: theme.colors.onSurfaceVariant }]}>
+                        {currentLead.fullAddress}
+                      </Text>
+                      {currentLead.county && (
+                        <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant, marginTop: spacing.xs }]}>
+                          County: {currentLead.county}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.copyButton, { backgroundColor: currentTheme.surfaceElevated }]}
+                    onPress={() => handleCopy(currentLead.fullAddress, 'Address')}
+                  >
+                    <Icon name="content-copy" size={16} color={currentTheme.textSecondary} />
+                    <Text style={[styles.copyButtonText, { color: currentTheme.textSecondary }]}>Copy</Text>
+                  </TouchableOpacity>
+                </View>
+              )
+            )}
+
+            {currentLead.fullName ? (
+              <>
+                {/* Phone Numbers */}
+                {isEditing ? (
+                  <>
+                    {editedLead?.phoneNumbers?.map((phone, index) => (
+                      <TextInput
+                        key={`phone-${index}`}
+                        value={phone}
+                        onChangeText={(text) => updatePhoneNumber(index, text)}
+                        mode="outlined"
+                        label={`Phone ${index + 1}`}
+                        dense
+                        style={{ marginBottom: spacing.sm }}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  currentLead.phoneNumbers?.map((phone, index) => phone && (
+                    <View key={`phone-${index}`} style={styles.contactItem}>
+                      <View style={styles.contactInfo}>
+                        <Text style={[styles.contactValue, { color: theme.colors.onSurfaceVariant }]}>
+                          {phone}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                        <TouchableOpacity
+                          style={[styles.actionButton, { backgroundColor: currentTheme.primary }]}
+                          onPress={() => handleCall(phone)}
+                        >
+                          <Icon name="phone" size={16} color="#FFFFFF" />
+                          <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>Call</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionButton, { backgroundColor: currentTheme.primary }]}
+                          onPress={() => handleSMS(phone)}
+                        >
+                          <Icon name="message-text" size={16} color="#FFFFFF" />
+                          <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>Text</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.copyButton, { backgroundColor: currentTheme.surfaceElevated }]}
+                          onPress={() => handleCopy(phone, 'Phone')}
+                        >
+                          <Icon name="content-copy" size={16} color={currentTheme.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                )}
+
+                {/* Email Addresses */}
+                {isEditing ? (
+                  <>
+                    {editedLead?.emails?.map((email, index) => (
+                      <TextInput
+                        key={`email-${index}`}
+                        value={email}
+                        onChangeText={(text) => updateEmail(index, text)}
+                        mode="outlined"
+                        label={`Email ${index + 1}`}
+                        dense
+                        style={{ marginBottom: spacing.sm }}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  currentLead.emails?.map((email, index) => email && (
+                    <View key={`email-${index}`} style={styles.contactItem}>
+                      <View style={styles.contactInfo}>
+                        <Text style={[styles.contactValue, { color: theme.colors.onSurfaceVariant }]}>
+                          {email}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                        <TouchableOpacity
+                          style={[styles.actionButton, { backgroundColor: currentTheme.primary }]}
+                          onPress={() => handleEmail(email)}
+                        >
+                          <Icon name="email" size={16} color="#FFFFFF" />
+                          <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>Email</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.copyButton, { backgroundColor: currentTheme.surfaceElevated }]}
+                          onPress={() => handleCopy(email, 'Email')}
+                        >
+                          <Icon name="content-copy" size={16} color={currentTheme.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </>
+            ) : (
+              <Text style={[styles.noDataText, { color: currentTheme.textTertiary }]}>
+                No homeowner data found via skip trace
+              </Text>
+            )}
+
+            {/* Homeowner Template Quick-Copy Section */}
+            {!isEditing && templates.filter(t => t.category === 'homeowner_email' || t.category === 'homeowner_text').length > 0 && (
+              <>
+                <Divider style={{ marginVertical: spacing.md, backgroundColor: currentTheme.border }} />
+                <TouchableOpacity
+                  style={[styles.templateButton, {
+                    backgroundColor: currentTheme.primary + '15',
+                    borderColor: currentTheme.primary,
+                  }]}
+                  onPress={() => {
+                    setTemplateDialogMode('homeowner');
+                    setShowTemplateDialog(true);
+                  }}
+                >
+                  <Icon name="text-box-multiple" size={18} color={currentTheme.primary} />
+                  <Text style={[styles.templateButtonText, { color: currentTheme.primary }]}>
+                    Copy Homeowner Template ({templates.filter(t => t.category === 'homeowner_email' || t.category === 'homeowner_text').length})
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
           </Surface>
 
-          {/* Description */}
+
+          {/* Pool Contractor Section */}
           <Surface
             style={[
               styles.card,
               {
                 backgroundColor: theme.colors.surface,
                 borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
+                borderColor: currentTheme.border,
               },
               shadows.sm,
             ]}
           >
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Description
+            <Text style={[styles.sectionLabel, { color: currentTheme.secondary }]}>
+              POOL CONTRACTOR
             </Text>
             {isEditing ? (
-              <TextInput
-                value={editedLead?.description}
-                onChangeText={(text) => updateField('description', text)}
-                mode="outlined"
-                multiline
-                numberOfLines={4}
-                placeholder="Enter description..."
-                style={styles.input}
-                left={<TextInput.Icon icon="text-box" />}
-              />
+              <>
+                <TextInput
+                  value={editedLead?.licensedName || ''}
+                  onChangeText={(text) => updateField('licensedName', text)}
+                  mode="outlined"
+                  label="Contractor Name"
+                  dense
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <TextInput
+                  value={editedLead?.licensedContractorNumber || ''}
+                  onChangeText={(text) => updateField('licensedContractorNumber', text)}
+                  mode="outlined"
+                  label="License Number"
+                  dense
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <TextInput
+                  value={editedLead?.licensedContact !== undefined ? editedLead.licensedContact : ''}
+                  onChangeText={(text) => updateField('licensedContact', text || '')}
+                  mode="outlined"
+                  label="Contractor Phone"
+                  dense
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <TextInput
+                  value={editedLead?.licensedStreet !== undefined ? editedLead.licensedStreet : ''}
+                  onChangeText={(text) => updateField('licensedStreet', text || '')}
+                  mode="outlined"
+                  label="Contractor Street"
+                  dense
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
+                  <TextInput
+                    value={editedLead?.licensedCity !== undefined ? editedLead.licensedCity : ''}
+                    onChangeText={(text) => updateField('licensedCity', text || '')}
+                    mode="outlined"
+                    label="City"
+                    dense
+                    style={{ flex: 1 }}
+                  />
+                  <TextInput
+                    value={editedLead?.licensedState !== undefined ? editedLead.licensedState : ''}
+                    onChangeText={(text) => updateField('licensedState', text || '')}
+                    mode="outlined"
+                    label="State"
+                    dense
+                    style={{ flex: 1 }}
+                  />
+                </View>
+                <TextInput
+                  value={editedLead?.licensedZip !== undefined ? editedLead.licensedZip : ''}
+                  onChangeText={(text) => updateField('licensedZip', text || '')}
+                  mode="outlined"
+                  label="Zip Code"
+                  dense
+                  style={{ marginBottom: spacing.sm }}
+                />
+              </>
             ) : (
-              <Text variant="bodyMedium" style={{ marginTop: spacing.sm, color: theme.colors.onSurfaceVariant }}>
-                {currentLead.description || 'No description'}
-              </Text>
+              <>
+                <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+                  {currentLead.licensedName || 'Unknown Contractor'}
+                </Text>
+
+                {/* Contractor License Number */}
+                {currentLead.licensedContractorNumber && (
+                  <View style={styles.contactItem}>
+                    <View style={styles.contactInfo}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>License #</Text>
+                        <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                          {currentLead.licensedContractorNumber}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.copyButton, { backgroundColor: currentTheme.surfaceElevated }]}
+                      onPress={() => handleCopy(currentLead.licensedContractorNumber!, 'License number')}
+                    >
+                      <Icon name="content-copy" size={16} color={currentTheme.textSecondary} />
+                      <Text style={[styles.copyButtonText, { color: currentTheme.textSecondary }]}>Copy</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Contractor Address */}
+                {(currentLead.licensedStreet || currentLead.licensedCity) && (
+                  <View style={styles.contactItem}>
+                    <View style={styles.contactInfo}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Address</Text>
+                        <Text style={[styles.contactValue, { color: theme.colors.onSurfaceVariant }]}>
+                          {[currentLead.licensedStreet, currentLead.licensedCity, currentLead.licensedState, currentLead.licensedZip]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.copyButton, { backgroundColor: currentTheme.surfaceElevated }]}
+                      onPress={() => handleCopy(
+                        [currentLead.licensedStreet, currentLead.licensedCity, currentLead.licensedState, currentLead.licensedZip]
+                          .filter(Boolean)
+                          .join(', '),
+                        'Contractor address'
+                      )}
+                    >
+                      <Icon name="content-copy" size={16} color={currentTheme.textSecondary} />
+                      <Text style={[styles.copyButtonText, { color: currentTheme.textSecondary }]}>Copy</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* Contractor Phone */}
+            {!isEditing && currentLead.licensedContact && (
+              <View style={styles.contactItem}>
+                <View style={styles.contactInfo}>
+                  <Text style={[styles.contactValue, { color: theme.colors.onSurfaceVariant }]}>
+                    {currentLead.licensedContact}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: currentTheme.secondary }]}
+                    onPress={() => handleCall(currentLead.licensedContact!)}
+                  >
+                    <Icon name="phone" size={16} color="#FFFFFF" />
+                    <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>Call</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: currentTheme.secondary }]}
+                    onPress={() => handleSMS(currentLead.licensedContact!, 'contractor')}
+                  >
+                    <Icon name="message-text" size={16} color="#FFFFFF" />
+                    <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>Text</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.copyButton, { backgroundColor: currentTheme.surfaceElevated }]}
+                    onPress={() => handleCopy(currentLead.licensedContact!, 'Contractor phone')}
+                  >
+                    <Icon name="content-copy" size={16} color={currentTheme.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Contractor Template Quick-Copy Section */}
+            {!isEditing && templates.filter(t => t.category === 'contractor_email' || t.category === 'contractor_text').length > 0 && (
+              <>
+                <Divider style={{ marginVertical: spacing.md, backgroundColor: currentTheme.border }} />
+                <TouchableOpacity
+                  style={[styles.templateButton, {
+                    backgroundColor: currentTheme.secondary + '15',
+                    borderColor: currentTheme.secondary,
+                  }]}
+                  onPress={() => {
+                    setTemplateDialogMode('contractor');
+                    setShowTemplateDialog(true);
+                  }}
+                >
+                  <Icon name="text-box-multiple" size={18} color={currentTheme.secondary} />
+                  <Text style={[styles.templateButtonText, { color: currentTheme.secondary }]}>
+                    Copy Contractor Template ({templates.filter(t => t.category === 'contractor_email' || t.category === 'contractor_text').length})
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </Surface>
 
-          {/* Notes */}
+          {/* Permit Details Section */}
           <Surface
             style={[
               styles.card,
               {
                 backgroundColor: theme.colors.surface,
                 borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
+                borderColor: currentTheme.border,
               },
               shadows.sm,
             ]}
           >
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Notes
+            <Text style={[styles.sectionLabel, { color: currentTheme.accent }]}>
+              PERMIT DETAILS
             </Text>
+
             {isEditing ? (
-              <TextInput
-                value={editedLead?.notes}
-                onChangeText={(text) => updateField('notes', text)}
-                mode="outlined"
-                multiline
-                numberOfLines={4}
-                style={styles.input}
-                left={<TextInput.Icon icon="note-text" />}
-              />
+              <>
+                <TextInput
+                  value={editedLead?.permitNumber || ''}
+                  onChangeText={(text) => updateField('permitNumber', text)}
+                  mode="outlined"
+                  label="Permit Number"
+                  dense
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <TextInput
+                  value={editedLead?.description || ''}
+                  onChangeText={(text) => updateField('description', text)}
+                  mode="outlined"
+                  label="Permit Description"
+                  multiline
+                  numberOfLines={3}
+                  dense
+                  style={{ marginBottom: spacing.sm }}
+                />
+              </>
             ) : (
-              <Text variant="bodyMedium" style={{ marginTop: spacing.sm, color: theme.colors.onSurfaceVariant }}>
-                {currentLead.notes || 'No notes'}
-              </Text>
+              <>
+                <View style={styles.permitGrid}>
+                  {currentLead.permitNumber && (
+                    <View style={styles.permitGridItem}>
+                      <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Permit #</Text>
+                      <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                        {currentLead.permitNumber}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.permitGridItem}>
+                    <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Type</Text>
+                    <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                      {currentLead.permitType.replace(/_/g, ' ').replace(/pool permits/i, 'Pool')}
+                    </Text>
+                  </View>
+                  {currentLead.permitDate && (
+                    <View style={styles.permitGridItem}>
+                      <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Date</Text>
+                      <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                        {new Date(currentLead.permitDate).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.permitGridItem}>
+                    <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>City</Text>
+                    <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                      {currentLead.city || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {!isEditing && currentLead.description && (
+              <View style={styles.permitDescription}>
+                <Divider style={{ marginVertical: spacing.md, backgroundColor: currentTheme.border }} />
+                <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Description</Text>
+                <Text style={[styles.permitValue, { color: theme.colors.onSurfaceVariant, marginTop: spacing.xs }]}>
+                  {currentLead.description}
+                </Text>
+              </View>
             )}
           </Surface>
 
-          {/* Metadata */}
+          {/* Activity Timeline */}
           <Surface
             style={[
               styles.card,
               {
                 backgroundColor: theme.colors.surface,
                 borderWidth: 1,
-                borderColor: theme.colors.outline + '20',
+                borderColor: currentTheme.border,
               },
               shadows.sm,
             ]}
           >
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Information
+            <Text style={[styles.sectionLabel, { color: currentTheme.badgeEstSent }]}>
+              ACTIVITY
             </Text>
 
-            <List.Item
-              title="Created Date"
-              description={formatDate(currentLead.createdDate)}
-              left={(props) => <List.Icon {...props} icon="calendar-plus" />}
-            />
-            <List.Item
-              title="Last Updated"
-              description={formatDate(currentLead.lastUpdated)}
-              left={(props) => <List.Icon {...props} icon="calendar-edit" />}
-            />
-            {currentLead.importedAt && (
-              <List.Item
-                title="Imported At"
-                description={formatDate(currentLead.importedAt)}
-                left={(props) => <List.Icon {...props} icon="database-import" />}
-              />
-            )}
-            <List.Item
-              title="Read Status"
-              description={currentLead.isRead ? 'Read' : 'Unread'}
-              left={(props) => <List.Icon {...props} icon={currentLead.isRead ? 'eye' : 'eye-off'} />}
-            />
-            <List.Item
-              title="Flagged"
-              description={currentLead.isFlagged ? 'Yes' : 'No'}
-              left={(props) => <List.Icon {...props} icon={currentLead.isFlagged ? 'flag' : 'flag-outline'} />}
-            />
+            <View style={styles.timeline}>
+              {(() => {
+                // Build combined timeline with all events
+                const timelineEvents: Array<{
+                  type: 'created' | 'status_change' | 'communication';
+                  date: Date;
+                  data?: any;
+                }> = [];
+
+                // Add lead creation
+                timelineEvents.push({
+                  type: 'created',
+                  date: currentLead.createdDate,
+                });
+
+                // Add status changes
+                (currentLead.statusHistory || []).forEach((statusChange) => {
+                  timelineEvents.push({
+                    type: 'status_change',
+                    date: statusChange.changedAt,
+                    data: statusChange,
+                  });
+                });
+
+                // Add communications
+                (currentLead.communications || []).forEach((comm) => {
+                  timelineEvents.push({
+                    type: 'communication',
+                    date: comm.sentAt,
+                    data: comm,
+                  });
+                });
+
+                // Sort by date (newest first)
+                timelineEvents.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+                return timelineEvents.map((event, index) => {
+                  if (event.type === 'created') {
+                    return (
+                      <View key={`created-${index}`} style={styles.timelineItem}>
+                        <View style={[styles.timelineDot, { backgroundColor: currentTheme.badgeNew }]} />
+                        <View style={styles.timelineContent}>
+                          <Text style={[styles.timelineTitle, { color: theme.colors.onSurface }]}>Lead created</Text>
+                          <Text style={[styles.timelineDate, { color: theme.colors.onSurfaceVariant }]}>
+                            {formatDate(event.date)}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  if (event.type === 'status_change') {
+                    const statusChange = event.data as StatusChange;
+                    const statusOption = getStatusOption(statusChange.to);
+                    return (
+                      <View key={`status-${index}`} style={styles.timelineItem}>
+                        <View style={[styles.timelineDot, { backgroundColor: statusOption.color }]} />
+                        <View style={styles.timelineContent}>
+                          <Text style={[styles.timelineTitle, { color: theme.colors.onSurface }]}>
+                            Status changed to {statusOption.label}
+                          </Text>
+                          <Text style={[styles.timelineDate, { color: theme.colors.onSurfaceVariant }]}>
+                            {formatDate(event.date)} • {statusChange.changedBy}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  if (event.type === 'communication') {
+                    const comm = event.data;
+                    return (
+                      <View key={`comm-${index}`} style={styles.timelineItem}>
+                        <View style={[styles.timelineDot, { backgroundColor: currentTheme.accent }]} />
+                        <View style={styles.timelineContent}>
+                          <Text style={[styles.timelineTitle, { color: theme.colors.onSurface }]}>
+                            {comm.type === 'sms' ? 'SMS sent' : 'Email sent'}
+                          </Text>
+                          <Text style={[styles.timelineDate, { color: theme.colors.onSurfaceVariant }]}>
+                            {formatDate(event.date)}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  return null;
+                });
+              })()}
+
+              {/* Action Buttons */}
+              {!isEditing && (
+                <View style={styles.activityActions}>
+                  <TouchableOpacity
+                    style={[styles.activityButton, { backgroundColor: currentTheme.primary, flex: 1 }]}
+                    onPress={handleMarkAsContacted}
+                  >
+                    <Icon name="check-circle" size={16} color="#FFFFFF" />
+                    <Text style={[styles.activityButtonText, { color: '#FFFFFF' }]}>Mark as Contacted</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.addNoteButton, { borderColor: currentTheme.border, flex: 1 }]}
+                    onPress={() => setShowNoteDialog(true)}
+                  >
+                    <Icon name="plus" size={16} color={theme.colors.onSurfaceVariant} />
+                    <Text style={[styles.addNoteText, { color: theme.colors.onSurfaceVariant }]}>Add note</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </Surface>
+
+          {/* Notes Section - Always visible in edit mode */}
+          {(currentLead.notes || isEditing) && (
+            <Surface
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: currentTheme.border,
+                },
+                shadows.sm,
+              ]}
+            >
+              <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>
+                NOTES
+              </Text>
+              {isEditing ? (
+                <TextInput
+                  value={editedLead?.notes || ''}
+                  onChangeText={(text) => updateField('notes', text)}
+                  mode="outlined"
+                  label="Lead Notes"
+                  multiline
+                  numberOfLines={4}
+                  style={{ marginTop: spacing.sm }}
+                />
+              ) : (
+                <Text style={[styles.permitValue, { color: theme.colors.onSurface, marginTop: spacing.sm }]}>
+                  {currentLead.notes || 'No notes'}
+                </Text>
+              )}
+            </Surface>
+          )}
+
+          {/* Source/Import Info */}
+          {(currentLead.source || currentLead.importedAt) && (
+            <Surface
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: currentTheme.border,
+                },
+                shadows.sm,
+              ]}
+            >
+              <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>
+                SOURCE
+              </Text>
+              <View style={styles.permitGrid}>
+                {currentLead.source && (
+                  <View style={styles.permitGridItem}>
+                    <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Import Source</Text>
+                    <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                      {currentLead.source}
+                    </Text>
+                  </View>
+                )}
+                {currentLead.importedAt && (
+                  <View style={styles.permitGridItem}>
+                    <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Imported</Text>
+                    <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                      {formatDate(currentLead.importedAt)}
+                    </Text>
+                  </View>
+                )}
+                {currentLead.recordId && (
+                  <View style={styles.permitGridItem}>
+                    <Text style={[styles.permitLabel, { color: theme.colors.onSurfaceVariant }]}>Record ID</Text>
+                    <Text style={[styles.permitValue, { color: theme.colors.onSurface }]}>
+                      {currentLead.recordId}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Surface>
+          )}
 
           <View style={{ height: spacing.xxxl }} />
         </ScrollView>
@@ -985,10 +1200,278 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
         initialMessageType={messageType}
         initialRecipient={selectedRecipient}
         copyMode={true}
+        lockMessageType={true}
+        recipientType={recipientType}
         onSuccess={() => {
           console.log('Message copied successfully');
         }}
       />
+
+      {/* Add Note Dialog */}
+      <Portal>
+        <Dialog
+          visible={showNoteDialog}
+          onDismiss={() => {
+            setShowNoteDialog(false);
+            setNewNote('');
+          }}
+          style={{ backgroundColor: theme.colors.surface }}
+        >
+          <Dialog.Title>Add Note</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Note"
+              value={newNote}
+              onChangeText={setNewNote}
+              mode="outlined"
+              multiline
+              numberOfLines={4}
+              placeholder="Enter your note here..."
+              autoFocus
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => {
+                setShowNoteDialog(false);
+                setNewNote('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onPress={handleAddNote} mode="contained">
+              Save Note
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Template Selection Dialog */}
+      <Portal>
+        <Dialog
+          visible={showTemplateDialog}
+          onDismiss={() => setShowTemplateDialog(false)}
+          style={{ backgroundColor: theme.colors.surface, maxHeight: '80%' }}
+        >
+          <Dialog.Title>
+            {templateDialogMode === 'homeowner' ? 'Homeowner Templates' : 'Contractor Templates'}
+          </Dialog.Title>
+          <Dialog.Content>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {templateDialogMode === 'homeowner' ? (
+                <>
+                  {/* Homeowner Email Templates */}
+                  {templates.filter(t => t.category === 'homeowner_email').length > 0 && (
+                    <>
+                      <Text style={[styles.templateSectionLabel, { color: currentTheme.primary }]}>
+                        EMAIL TEMPLATES
+                      </Text>
+                      {templates
+                        .filter(t => t.category === 'homeowner_email')
+                        .map((template) => (
+                          <View
+                            key={template.id}
+                            style={[styles.templateItem, {
+                              backgroundColor: currentTheme.surfaceElevated,
+                              borderColor: currentTheme.border,
+                            }]}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                                {template.name}
+                              </Text>
+                              {template.subject && (
+                                <Text style={[styles.templateSubject, { color: theme.colors.onSurfaceVariant }]}>
+                                  Subject: {template.subject}
+                                </Text>
+                              )}
+                              <Text
+                                style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                {template.body}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                              <TouchableOpacity
+                                style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                                onPress={() => {
+                                  const populatedBody = replaceTemplateVariables(template.body);
+                                  const populatedSubject = template.subject ? replaceTemplateVariables(template.subject) : '';
+                                  const primaryEmail = lead?.emails?.[0] || '';
+                                  const encodedSubject = encodeURIComponent(populatedSubject);
+                                  const encodedBody = encodeURIComponent(populatedBody);
+                                  const mailtoURL = `mailto:${primaryEmail}?subject=${encodedSubject}&body=${encodedBody}`;
+                                  Linking.openURL(mailtoURL);
+                                  setShowTemplateDialog(false);
+                                }}
+                              >
+                                <Icon name="email-open-outline" size={18} color={currentTheme.primary} />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                                onPress={() => handleCopyTemplate(template)}
+                              >
+                                <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+                    </>
+                  )}
+
+                  {/* Homeowner SMS Templates */}
+                  {templates.filter(t => t.category === 'homeowner_text').length > 0 && (
+                    <>
+                      <Text style={[styles.templateSectionLabel, { color: currentTheme.primary, marginTop: spacing.lg }]}>
+                        SMS TEMPLATES
+                      </Text>
+                      {templates
+                        .filter(t => t.category === 'homeowner_text')
+                        .map((template) => (
+                          <View
+                            key={template.id}
+                            style={[styles.templateItem, {
+                              backgroundColor: currentTheme.surfaceElevated,
+                              borderColor: currentTheme.border,
+                            }]}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                                {template.name}
+                              </Text>
+                              <Text
+                                style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                {template.body}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                              <TouchableOpacity
+                                style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                                onPress={() => {
+                                  const populatedBody = replaceTemplateVariables(template.body);
+                                  const primaryPhone = lead?.phoneNumbers?.[0] || '';
+                                  const encodedBody = encodeURIComponent(populatedBody);
+                                  const smsURL = Platform.OS === 'ios'
+                                    ? `sms:${primaryPhone}&body=${encodedBody}`
+                                    : `sms:${primaryPhone}?body=${encodedBody}`;
+                                  Linking.openURL(smsURL);
+                                  setShowTemplateDialog(false);
+                                }}
+                              >
+                                <Icon name="message-text-outline" size={18} color={currentTheme.primary} />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                                onPress={() => handleCopyTemplate(template)}
+                              >
+                                <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+                    </>
+                  )}
+
+                  {templates.filter(t => t.category === 'homeowner_email' || t.category === 'homeowner_text').length === 0 && (
+                    <Text style={[styles.noTemplatesText, { color: currentTheme.textSecondary }]}>
+                      No homeowner templates available.
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Contractor Email Templates */}
+                  {templates.filter(t => t.category === 'contractor_email').length > 0 && (
+                    <>
+                      <Text style={[styles.templateSectionLabel, { color: currentTheme.secondary }]}>
+                        EMAIL TEMPLATES
+                      </Text>
+                      {templates
+                        .filter(t => t.category === 'contractor_email')
+                        .map((template) => (
+                          <TouchableOpacity
+                            key={template.id}
+                            style={[styles.templateItem, {
+                              backgroundColor: currentTheme.surfaceElevated,
+                              borderColor: currentTheme.border,
+                            }]}
+                            onPress={() => handleCopyTemplate(template)}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                                {template.name}
+                              </Text>
+                              {template.subject && (
+                                <Text style={[styles.templateSubject, { color: theme.colors.onSurfaceVariant }]}>
+                                  Subject: {template.subject}
+                                </Text>
+                              )}
+                              <Text
+                                style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                {template.body}
+                              </Text>
+                            </View>
+                            <Icon name="content-copy" size={20} color={currentTheme.secondary} />
+                          </TouchableOpacity>
+                        ))}
+                    </>
+                  )}
+
+                  {/* Contractor SMS Templates */}
+                  {templates.filter(t => t.category === 'contractor_text').length > 0 && (
+                    <>
+                      <Text style={[styles.templateSectionLabel, { color: currentTheme.secondary, marginTop: spacing.lg }]}>
+                        SMS TEMPLATES
+                      </Text>
+                      {templates
+                        .filter(t => t.category === 'contractor_text')
+                        .map((template) => (
+                          <TouchableOpacity
+                            key={template.id}
+                            style={[styles.templateItem, {
+                              backgroundColor: currentTheme.surfaceElevated,
+                              borderColor: currentTheme.border,
+                            }]}
+                            onPress={() => handleCopyTemplate(template)}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                                {template.name}
+                              </Text>
+                              <Text
+                                style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                {template.body}
+                              </Text>
+                            </View>
+                            <Icon name="content-copy" size={20} color={currentTheme.secondary} />
+                          </TouchableOpacity>
+                        ))}
+                    </>
+                  )}
+
+                  {templates.filter(t => t.category === 'contractor_email' || t.category === 'contractor_text').length === 0 && (
+                    <Text style={[styles.noTemplatesText, { color: currentTheme.textSecondary }]}>
+                      No contractor templates available.
+                    </Text>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowTemplateDialog(false)}>
+              Close
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {/* Copy Feedback Snackbar */}
       <Snackbar
@@ -1010,56 +1493,215 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    padding: spacing.xl,
-    marginBottom: spacing.xl,          // More space
-    borderRadius: borderRadius.xl,      // More rounded
-    margin: spacing.xl,
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.lg,
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  backButtonText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 12,
+  },
+  headerSection: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.xl,           // More space
+    gap: spacing.md,
+  },
+  recordId: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  leadName: {
+    fontFamily: 'DMSans_800ExtraBold',
+    fontSize: 24,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  address: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+    flex: 1,
   },
   editActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: spacing.lg,              // More space
+    marginTop: spacing.lg,
     gap: spacing.md,
   },
-  leadName: {
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-    fontSize: 24,                       // Larger
-    lineHeight: 32,
+  statusPipeline: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  statusButton: {
+    flex: 1,
+    minWidth: 90,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  statusButtonText: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  sectionLabel: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 9,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: spacing.md,
   },
   card: {
     marginHorizontal: spacing.xl,
-    marginBottom: spacing.xl,           // More space between sections
-    padding: spacing.xxl,               // More generous padding
-    borderRadius: borderRadius.xl,      // More rounded
+    marginBottom: spacing.xl,
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
   },
   sectionTitle: {
-    fontWeight: '700',
-    marginBottom: spacing.xl,           // More space
+    fontFamily: 'DMSans_700Bold',
     fontSize: 18,
-    letterSpacing: -0.3,
+    marginBottom: spacing.lg,
   },
-  actionsContainer: {
+  contactItem: {
     flexDirection: 'row',
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
-  actionsContainerMobile: {
-    flexDirection: 'column',
-    gap: spacing.md,                    // Add gap for mobile
+  contactInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  contactValue: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  copyButtonText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 12,
   },
   actionButton: {
-    flex: 1,
-    borderRadius: borderRadius.lg,      // More rounded
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
   },
-  actionButtonMobile: {
-    width: '100%',
+  actionButtonText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 12,
+  },
+  noDataText: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+  },
+  permitGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.lg,
+  },
+  permitGridItem: {
+    flex: 1,
+    minWidth: '30%',
+  },
+  permitLabel: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 10,
+    marginBottom: spacing.xs,
+  },
+  permitValue: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13,
+  },
+  permitDescription: {
+    marginTop: spacing.md,
+  },
+  timeline: {
+    gap: spacing.lg,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'flex-start',
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineTitle: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 12,
+    marginBottom: spacing.xs,
+  },
+  timelineDate: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 10,
+  },
+  activityActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  activityButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  activityButtonText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 12,
+  },
+  addNoteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  addNoteText: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 11,
   },
   contactActions: {
     flexDirection: 'row',
@@ -1102,5 +1744,63 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.xxxxl,     // More padding
     paddingHorizontal: spacing.xxl,
+  },
+  templateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  templateButtonText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13,
+  },
+  templateSectionLabel: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 9,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  templateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+  },
+  templateName: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 14,
+    marginBottom: spacing.xs,
+  },
+  templateSubject: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 12,
+    marginBottom: spacing.xs,
+  },
+  templatePreview: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  templateActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noTemplatesText: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: spacing.xl,
   },
 });

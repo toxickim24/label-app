@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform, Alert, TouchableOpacity, Linking } from 'react-native';
 import {
   Dialog,
   Portal,
@@ -18,8 +18,9 @@ import {
   Divider,
 } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { Lead, Template } from '../types';
-import { spacing } from '../theme';
+import { spacing, borderRadius, shadows, darkTheme, lightTheme } from '../theme';
 import { API_CONFIG, API_ENDPOINTS } from '../config/api';
 import EmptyState from './EmptyState';
 import axios from 'axios';
@@ -34,6 +35,8 @@ interface SendMessageDialogProps {
   initialRecipient?: string;
   copyMode?: boolean;
   onSuccess?: () => void;
+  lockMessageType?: boolean; // If true, hide message type selector
+  recipientType?: 'homeowner' | 'contractor'; // Filter templates by recipient type
 }
 
 export default function SendMessageDialog({
@@ -44,8 +47,11 @@ export default function SendMessageDialog({
   initialRecipient,
   copyMode = false,
   onSuccess,
+  lockMessageType = false,
+  recipientType = 'homeowner',
 }: SendMessageDialogProps) {
   const theme = useTheme();
+  const currentTheme = theme.dark ? darkTheme : lightTheme;
   const [messageType, setMessageType] = useState<'sms' | 'email'>(initialMessageType);
 
   // Debug: Log API config status
@@ -85,10 +91,11 @@ export default function SendMessageDialog({
     }
   }, [visible, lead.permitType]);
 
-  // Get templates for this permit type and message type
+  // Get templates for this permit type, message type, and recipient type
   const availableTemplates = templates.filter(
     (t) =>
       t.isActive &&
+      t.category.includes(recipientType) && // Filter by homeowner or contractor
       (messageType === 'email'
         ? t.category.includes('email')
         : t.category.includes('text'))
@@ -170,6 +177,74 @@ export default function SendMessageDialog({
     } catch (error) {
       console.error('Copy error:', error);
       const errorMessage = 'Failed to copy message';
+      if (Platform.OS === 'web') {
+        window.alert(errorMessage);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
+    }
+  };
+
+  const handleOpenEmailApp = async () => {
+    if (!recipient || !message.trim()) {
+      const alertMessage = 'Please fill in recipient and message';
+      if (Platform.OS === 'web') {
+        window.alert(alertMessage);
+      } else {
+        Alert.alert('Error', alertMessage);
+      }
+      return;
+    }
+
+    try {
+      // Encode subject and body for mailto URL
+      const encodedSubject = encodeURIComponent(subject || '');
+      const encodedBody = encodeURIComponent(message);
+      const mailtoURL = `mailto:${recipient}?subject=${encodedSubject}&body=${encodedBody}`;
+
+      await Linking.openURL(mailtoURL);
+
+      // Close dialog after opening email app
+      onSuccess?.();
+      onDismiss();
+    } catch (error) {
+      console.error('Open email app error:', error);
+      const errorMessage = 'Failed to open email app';
+      if (Platform.OS === 'web') {
+        window.alert(errorMessage);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
+    }
+  };
+
+  const handleOpenSMSApp = async () => {
+    if (!recipient || !message.trim()) {
+      const alertMessage = 'Please fill in recipient and message';
+      if (Platform.OS === 'web') {
+        window.alert(alertMessage);
+      } else {
+        Alert.alert('Error', alertMessage);
+      }
+      return;
+    }
+
+    try {
+      // Encode body for SMS URL
+      const encodedBody = encodeURIComponent(message);
+      // iOS uses & while Android uses ? - use & as it works on both
+      const smsURL = Platform.OS === 'ios'
+        ? `sms:${recipient}&body=${encodedBody}`
+        : `sms:${recipient}?body=${encodedBody}`;
+
+      await Linking.openURL(smsURL);
+
+      // Close dialog after opening SMS app
+      onSuccess?.();
+      onDismiss();
+    } catch (error) {
+      console.error('Open SMS app error:', error);
+      const errorMessage = 'Failed to open SMS app';
       if (Platform.OS === 'web') {
         window.alert(errorMessage);
       } else {
@@ -310,63 +385,85 @@ export default function SendMessageDialog({
 
   return (
     <Portal>
-      <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
-        <Dialog.Title>
-          {copyMode ? 'Compose Message' : 'Send Message to'} {lead.fullName}
+      <Dialog visible={visible} onDismiss={onDismiss} style={[styles.dialog, { backgroundColor: currentTheme.surface }]}>
+        <Dialog.Title style={{ fontFamily: 'DMSans_700Bold', fontSize: 18, color: currentTheme.text }}>
+          {copyMode ? 'Compose Message' : 'Send Message'}
         </Dialog.Title>
+        <Text style={{ paddingHorizontal: spacing.lg, fontFamily: 'DMSans_500Medium', fontSize: 13, color: currentTheme.textSecondary, marginTop: -spacing.sm, marginBottom: spacing.md }}>
+          {lead.fullName} • {messageType === 'email' ? 'Email' : 'SMS'} {recipientType === 'contractor' ? '(Contractor)' : '(Homeowner)'}
+        </Text>
         <Dialog.ScrollArea style={styles.scrollArea}>
           <ScrollView>
-            {/* Message Type Selector */}
-            <SegmentedButtons
-              value={messageType}
-              onValueChange={(value) => setMessageType(value as 'sms' | 'email')}
-              buttons={[
-                {
-                  value: 'sms',
-                  label: 'SMS',
-                  icon: 'message',
-                },
-                {
-                  value: 'email',
-                  label: 'Email',
-                  icon: 'email',
-                },
-              ]}
-              style={styles.segmentedButtons}
-            />
+            {/* Message Type Selector - Only show if not locked */}
+            {!lockMessageType && (
+              <SegmentedButtons
+                value={messageType}
+                onValueChange={(value) => setMessageType(value as 'sms' | 'email')}
+                buttons={[
+                  {
+                    value: 'sms',
+                    label: 'SMS',
+                    icon: 'message',
+                  },
+                  {
+                    value: 'email',
+                    label: 'Email',
+                    icon: 'email',
+                  },
+                ]}
+                style={styles.segmentedButtons}
+              />
+            )}
 
             {/* Templates Section */}
             {availableTemplates.length > 0 ? (
               <View style={styles.section}>
-                <Button
-                  mode="outlined"
-                  icon="text-box"
+                <TouchableOpacity
+                  style={[styles.templateToggle, { backgroundColor: currentTheme.primary + '10', borderColor: currentTheme.primary }]}
                   onPress={() => setShowTemplates(!showTemplates)}
-                  style={styles.templateButton}
                 >
-                  {showTemplates ? 'Hide Templates' : `Use Template (${availableTemplates.length})`}
-                </Button>
+                  <Icon name={showTemplates ? 'chevron-up' : 'chevron-down'} size={20} color={currentTheme.primary} />
+                  <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 13, color: currentTheme.primary, flex: 1 }}>
+                    {showTemplates ? 'Hide' : 'Use'} Template ({availableTemplates.length})
+                  </Text>
+                  <Icon name="text-box-multiple-outline" size={18} color={currentTheme.primary} />
+                </TouchableOpacity>
 
                 {showTemplates && (
                   <View style={styles.templatesList}>
                     {availableTemplates.map((template) => (
-                      <List.Item
+                      <TouchableOpacity
                         key={template.id}
-                        title={template.name}
-                        description={template.subject || template.body.substring(0, 50) + '...'}
-                        left={(props) => <List.Icon {...props} icon="text-box-outline" />}
+                        style={[styles.templateCard, { backgroundColor: currentTheme.surfaceElevated, borderColor: currentTheme.border }]}
                         onPress={() => applyTemplate(template)}
-                        style={styles.templateItem}
-                      />
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: currentTheme.text }}>
+                            {template.name}
+                          </Text>
+                          {template.subject && (
+                            <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 11, color: currentTheme.textSecondary, marginTop: 2 }}>
+                              Subject: {template.subject}
+                            </Text>
+                          )}
+                          <Text
+                            style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: currentTheme.textTertiary, marginTop: spacing.xs }}
+                            numberOfLines={2}
+                          >
+                            {template.body.substring(0, 80)}...
+                          </Text>
+                        </View>
+                        <Icon name="chevron-right" size={20} color={currentTheme.primary} />
+                      </TouchableOpacity>
                     ))}
                   </View>
                 )}
               </View>
             ) : templates.length > 0 ? (
-              <View style={[styles.section, styles.infoBox]}>
-                <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
-                  No {messageType === 'email' ? 'email' : 'SMS'} templates available for {lead.permitType.replace(/_/g, ' ')}.
-                  {'\n'}Switch to {messageType === 'email' ? 'SMS' : 'Email'} or create templates in the Templates screen.
+              <View style={[styles.section, { backgroundColor: currentTheme.accent + '15', padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: currentTheme.accent }]}>
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 12, color: currentTheme.accent }}>
+                  No {messageType === 'email' ? 'email' : 'SMS'} templates available for {recipientType}s.
+                  {'\n'}Create templates in the Templates screen.
                 </Text>
               </View>
             ) : (
@@ -374,7 +471,7 @@ export default function SendMessageDialog({
                 <EmptyState
                   icon="text-box-outline"
                   title="No Templates Available"
-                  description={`You need to create ${messageType === 'email' ? 'email' : 'SMS'} templates first. Go to the Templates tab to create reusable message templates for ${lead.permitType.replace(/_/g, ' ')}.`}
+                  description={`Create ${messageType === 'email' ? 'email' : 'SMS'} templates in the Templates tab.`}
                   compact
                   style={{ marginVertical: 0 }}
                 />
@@ -396,14 +493,31 @@ export default function SendMessageDialog({
 
             {/* Subject (Email only) */}
             {messageType === 'email' && (
-              <TextInput
-                label="Subject"
-                value={subject}
-                onChangeText={setSubject}
-                mode="outlined"
-                style={styles.input}
-                left={<TextInput.Icon icon="text-short" />}
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  label="Subject"
+                  value={subject}
+                  onChangeText={setSubject}
+                  mode="outlined"
+                  style={styles.input}
+                  left={<TextInput.Icon icon="text-short" />}
+                />
+                {subject.trim() && (
+                  <TouchableOpacity
+                    style={{ position: 'absolute', right: spacing.lg + spacing.xs, top: 14 }}
+                    onPress={async () => {
+                      await Clipboard.setStringAsync(subject);
+                      if (Platform.OS === 'web') {
+                        window.alert('Subject copied!');
+                      } else {
+                        Alert.alert('Success', 'Subject copied!');
+                      }
+                    }}
+                  >
+                    <Icon name="content-copy" size={18} color={currentTheme.textSecondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
 
             {/* Message */}
@@ -422,9 +536,10 @@ export default function SendMessageDialog({
             {messageType === 'sms' && (
               <View style={styles.characterCount}>
                 <Text
-                  variant="bodySmall"
                   style={{
-                    color: message.length > 160 ? theme.colors.error : theme.colors.secondary,
+                    fontFamily: 'DMSans_500Medium',
+                    fontSize: 11,
+                    color: message.length > 160 ? currentTheme.coral : currentTheme.textSecondary,
                   }}
                 >
                   {message.length} characters
@@ -436,35 +551,70 @@ export default function SendMessageDialog({
             {/* API Warning */}
             {(!API_CONFIG.TWILIO_ACCOUNT_SID && messageType === 'sms') ||
             (!API_CONFIG.SENDGRID_API_KEY && messageType === 'email') ? (
-              <View style={[styles.warningBox, { backgroundColor: theme.colors.errorContainer }]}>
-                <Text variant="bodySmall" style={{ color: theme.colors.error }}>
+              <View style={[styles.warningBox, { backgroundColor: currentTheme.coral + '15', borderWidth: 1, borderColor: currentTheme.coral }]}>
+                <Icon name="alert-circle-outline" size={16} color={currentTheme.coral} />
+                <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 11, color: currentTheme.coral, marginLeft: spacing.xs, flex: 1 }}>
                   {messageType === 'sms'
-                    ? 'Twilio credentials not configured. Add them to src/config/api.ts'
-                    : 'SendGrid API key not configured. Add it to src/config/api.ts'}
+                    ? 'Twilio credentials not configured'
+                    : 'SendGrid API key not configured'}
                 </Text>
               </View>
             ) : null}
           </ScrollView>
         </Dialog.ScrollArea>
 
-        <Dialog.Actions>
-          <Button onPress={onDismiss} disabled={isSending}>
+        <Dialog.Actions style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.sm }}>
+          <Button
+            onPress={onDismiss}
+            disabled={isSending}
+            textColor={currentTheme.textSecondary}
+            labelStyle={{ fontFamily: 'DMSans_600SemiBold', fontSize: 13 }}
+          >
             Cancel
           </Button>
           {copyMode ? (
-            <Button
-              mode="contained"
-              onPress={handleCopy}
-              icon="content-copy"
-            >
-              Copy Message
-            </Button>
+            <>
+              {messageType === 'email' ? (
+                <Button
+                  mode="outlined"
+                  onPress={handleOpenEmailApp}
+                  icon="email-open-outline"
+                  style={{ borderColor: currentTheme.primary, marginRight: spacing.xs }}
+                  textColor={currentTheme.primary}
+                  labelStyle={{ fontFamily: 'DMSans_600SemiBold', fontSize: 13 }}
+                >
+                  Open Email
+                </Button>
+              ) : (
+                <Button
+                  mode="outlined"
+                  onPress={handleOpenSMSApp}
+                  icon="message-text-outline"
+                  style={{ borderColor: currentTheme.primary, marginRight: spacing.xs }}
+                  textColor={currentTheme.primary}
+                  labelStyle={{ fontFamily: 'DMSans_600SemiBold', fontSize: 13 }}
+                >
+                  Open SMS
+                </Button>
+              )}
+              <Button
+                mode="contained"
+                onPress={handleCopy}
+                icon="content-copy"
+                buttonColor={currentTheme.primary}
+                labelStyle={{ fontFamily: 'DMSans_700Bold', fontSize: 13 }}
+              >
+                Copy
+              </Button>
+            </>
           ) : (
             <Button
               mode="contained"
               onPress={handleSend}
               loading={isSending}
               disabled={isSending}
+              buttonColor={currentTheme.primary}
+              labelStyle={{ fontFamily: 'DMSans_700Bold', fontSize: 13 }}
             >
               Send {messageType.toUpperCase()}
             </Button>
@@ -477,7 +627,7 @@ export default function SendMessageDialog({
 
 const styles = StyleSheet.create({
   dialog: {
-    maxWidth: 600,
+    maxWidth: 550,
     alignSelf: 'center',
     width: '90%',
   },
@@ -486,48 +636,56 @@ const styles = StyleSheet.create({
     maxHeight: 500,
   },
   segmentedButtons: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
   },
   section: {
-    marginTop: spacing.md,
-    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginHorizontal: spacing.md,
   },
-  templateButton: {
+  templateToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
     marginBottom: spacing.sm,
   },
   templatesList: {
-    borderRadius: 8,
-    overflow: 'hidden',
+    gap: spacing.sm,
   },
-  templateItem: {
-    paddingVertical: spacing.xs,
+  templateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    ...shadows.sm,
   },
   divider: {
     marginVertical: spacing.md,
   },
   input: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   messageInput: {
-    minHeight: 120,
+    minHeight: 100,
   },
   characterCount: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
+    marginTop: -spacing.xs,
     alignItems: 'flex-end',
   },
   warningBox: {
-    marginHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     padding: spacing.sm,
-    borderRadius: 8,
-  },
-  infoBox: {
-    backgroundColor: '#f5f5f5',
-    padding: spacing.sm,
-    borderRadius: 8,
-    marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
   },
 });

@@ -9,7 +9,7 @@ import { Text, Card, IconButton, useTheme, Button, Surface } from 'react-native-
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useNotificationsStore, useAuthStore } from '../../store';
 import { Notification } from '../../types';
-import { spacing, shadows, borderRadius } from '../../theme';
+import { spacing, shadows, borderRadius, darkTheme, lightTheme } from '../../theme';
 import WebContainer from '../../components/WebContainer';
 import EmptyState from '../../components/EmptyState';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
@@ -22,6 +22,7 @@ import {
 
 export default function NotificationsScreen() {
   const theme = useTheme();
+  const currentTheme = theme.dark ? darkTheme : lightTheme;
   const { notifications, setNotifications } = useNotificationsStore();
   const user = useAuthStore((state) => state.user);
 
@@ -76,8 +77,9 @@ export default function NotificationsScreen() {
         styles.card,
         {
           backgroundColor: !item.isRead
-            ? theme.colors.primaryContainer
-            : theme.colors.surface,
+            ? currentTheme.primary + '10'
+            : currentTheme.surface,
+          borderColor: currentTheme.border,
         },
         shadows.sm,
       ]}
@@ -86,25 +88,25 @@ export default function NotificationsScreen() {
         <View style={styles.header}>
           <View style={styles.titleRow}>
             {!item.isRead && (
-              <Icon name="circle" size={8} color={theme.colors.primary} style={styles.unreadDot} />
+              <Icon name="circle" size={8} color={currentTheme.primary} style={styles.unreadDot} />
             )}
-            <Text variant="titleMedium" style={{ flex: 1, color: theme.colors.onSurface }}>
+            <Text style={{ flex: 1, fontFamily: 'DMSans_600SemiBold', fontSize: 15, color: currentTheme.text }}>
               {item.title}
             </Text>
           </View>
           <IconButton
             icon="close"
-            size={20}
+            size={18}
             onPress={() => handleDeleteNotification(item.id)}
           />
         </View>
 
-        <Text variant="bodyMedium" style={[styles.body, { color: theme.colors.onSurfaceVariant }]}>
+        <Text style={[styles.body, { color: currentTheme.textSecondary }]}>
           {item.body}
         </Text>
 
         <View style={styles.footer}>
-          <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
+          <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 11, color: currentTheme.textSecondary }}>
             {formatRelativeTime(item.createdAt)}
           </Text>
           <Button
@@ -121,9 +123,9 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <WebContainer>
+      <WebContainer noPadding>
         <View style={styles.headerContainer}>
-          <Text variant="headlineSmall">Notifications</Text>
+          <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 24, color: currentTheme.text }}>Notifications</Text>
           {notifications.some((n) => !n.isRead) && (
             <Button mode="text" onPress={handleMarkAllAsRead}>
               Mark all read
@@ -157,16 +159,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.xl,
-    paddingBottom: spacing.md,
+    padding: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   list: {
-    padding: spacing.xl,
+    padding: spacing.lg,
     paddingTop: 0,
   },
   card: {
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
     ...Platform.select({
@@ -177,13 +179,13 @@ const styles = StyleSheet.create({
     }),
   },
   cardContent: {
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   titleRow: {
     flexDirection: 'row',
@@ -191,17 +193,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   unreadDot: {
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   body: {
+    fontFamily: 'DMSans_400Regular',
     marginTop: spacing.xs,
-    marginBottom: spacing.md,
-    lineHeight: 22,
+    marginBottom: spacing.sm,
+    lineHeight: 20,
+    fontSize: 13,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
 });

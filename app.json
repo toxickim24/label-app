@@ -12,10 +12,12 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "plugins": [],
+    "plugins": [
+      "expo-font"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.labelmobile",
+      "bundleIdentifier": "com.labelapp.mobile",
       "googleServicesFile": "./ios/GoogleService-Info.plist"
     },
     "android": {
@@ -25,7 +27,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.labelmobile",
+      "package": "com.labelapp.mobile",
       "googleServicesFile": "./android/app/google-services.json"
     },
     "web": {
