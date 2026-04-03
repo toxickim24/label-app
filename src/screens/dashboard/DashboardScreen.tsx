@@ -3,10 +3,12 @@
  * Main screen showing leads
  */
 
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Platform, ScrollView, Linking } from 'react-native';
-import { Text, Card, Chip, Searchbar, useTheme, Surface, Dialog, Portal, Button, Snackbar } from 'react-native-paper';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, SectionList, RefreshControl, TouchableOpacity, Platform, ScrollView, Linking } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Card, Chip, Searchbar, useTheme, Surface, Dialog, Portal, Button } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import BottomSheetModal from '@gorhom/bottom-sheet';
 import * as Clipboard from 'expo-clipboard';
 import { useLeadsStore, useAuthStore } from '../../store';
 import { subscribeToLeads } from '../../services/leadsService';
@@ -17,10 +19,14 @@ import { spacing, borderRadius, shadows } from '../../theme';
 import WebContainer from '../../components/WebContainer';
 import EmptyState from '../../components/EmptyState';
 import { LeadCard } from '../../components/LeadCard';
+import { DashboardSkeleton, BottomSheet } from '../../components';
 import { getLeadHealth, getLeadHealthInfo } from '../../utils/leadHealth';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import { useResponsive } from '../../hooks/useResponsive';
 import { sortByPriority, sortByNewest, sortByOldest, filterStaleLeads } from '../../utils/leadUtils';
+import { showToast } from '../../utils/toast';
+import { haptics } from '../../utils/haptics';
+import { getLeadSections } from '../../utils/dateGrouping';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -45,13 +51,16 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   console.log('📊 DashboardScreen - leads count:', leads.length);
 
   const [refreshing, setRefreshing] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [selectedPermitType, setSelectedPermitType] = React.useState<PermitType | 'all'>('all');
   const [showStaleOnly, setShowStaleOnly] = React.useState(false);
+  const [groupByTime, setGroupByTime] = React.useState(true); // Enable time-based grouping by default
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  // Bottom sheet ref for mobile template selection
+  const templateBottomSheetRef = useRef<BottomSheetModal>(null);
 
   // Always use priority sorting (smart: stale leads + status-based priority)
   const sortBy = 'priority';
@@ -60,9 +69,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   // Note: We fetch ALL leads and filter locally for better UX (instant filtering)
   useEffect(() => {
     console.log('📡 Setting up Firestore subscription...');
+    setIsLoading(true);
     const unsubscribe = subscribeToLeads('all', 'all', (fetchedLeads) => {
       console.log(`✅ Received ${fetchedLeads.length} leads from Firestore`);
       setLeads(fetchedLeads);
+      setIsLoading(false);
     });
 
     return () => {
@@ -126,6 +137,15 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         return sortByNewest(filtered);
     }
   }, [leads, selectedPermitType, statusFilter, searchQuery, sortBy, showStaleOnly]);
+
+  // Create sections for time-based grouping
+  const leadSections = React.useMemo(() => {
+    if (!groupByTime) {
+      // Return all leads in a single section when grouping is disabled
+      return [{ title: '', data: filteredLeads, key: 'all' as const }];
+    }
+    return getLeadSections(filteredLeads);
+  }, [filteredLeads, groupByTime]);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -195,6 +215,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     if (!selectedLead) return;
 
     try {
+      haptics.light();
       const populatedBody = replaceTemplateVariables(template.body, selectedLead);
       const populatedSubject = template.subject ? replaceTemplateVariables(template.subject, selectedLead) : '';
 
@@ -204,13 +225,19 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
       await Clipboard.setStringAsync(textToCopy);
       await incrementTemplateUsage(template.id);
-      setSnackbarMessage(`Template "${template.name}" copied with lead data`);
-      setSnackbarVisible(true);
-      setShowTemplateDialog(false);
+      haptics.success();
+      showToast.success('Template copied!', `"${template.name}" copied with lead data`);
+
+      // Close bottom sheet or dialog depending on platform
+      if (Platform.OS === 'web') {
+        setShowTemplateDialog(false);
+      } else {
+        templateBottomSheetRef.current?.dismiss();
+      }
     } catch (error) {
       console.error('Error copying template:', error);
-      setSnackbarMessage('Failed to copy template');
-      setSnackbarVisible(true);
+      haptics.error();
+      showToast.error('Failed to copy template', 'Please try again');
     }
   };
 
@@ -225,7 +252,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       onQuickAction={(action, phone, email) => {
         if (action === 'template') {
           setSelectedLead(item);
-          setShowTemplateDialog(true);
+          if (Platform.OS === 'web') {
+            setShowTemplateDialog(true);
+          } else {
+            templateBottomSheetRef.current?.present();
+          }
         }
       }}
     />
@@ -326,14 +357,22 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
       <WebContainer noPadding>
         {/* Header with LABEL branding */}
         <Surface style={[styles.header, { backgroundColor: theme.colors.surface, borderColor: currentTheme.border, marginHorizontal: containerPadding, marginTop: spacing.xs }]}>
           <View style={styles.headerTop}>
             <View>
               <Text style={[styles.brandLabel, { color: theme.colors.primary }]}>LABEL</Text>
-              <Text style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Pool Leads</Text>
+              <Text style={[styles.headerTitle, { color: theme.colors.onSurface }]}>
+                {selectedPermitType === 'all'
+                  ? 'All Leads'
+                  : selectedPermitType === 'pool_permits'
+                  ? 'Pool Leads'
+                  : selectedPermitType === 'kitchen_bath_permits'
+                  ? 'Kitchen & Bath Leads'
+                  : 'Roof Leads'}
+              </Text>
             </View>
             <View style={styles.headerActions}>
               <TouchableOpacity
@@ -415,8 +454,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             {
               backgroundColor: theme.colors.surface,
               marginHorizontal: containerPadding,
-              marginBottom: spacing.xs,
-              marginTop: spacing.xs,
+              marginBottom: isMobile ? 4 : spacing.xs,
+              marginTop: isMobile ? 4 : spacing.xs,
             },
           ]}
           iconColor={theme.colors.primary}
@@ -425,7 +464,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         />
 
         {/* Status Filters with Stale Toggle */}
-        <View style={[styles.filtersContainer, { paddingHorizontal: isMobile ? 0 : containerPadding }]}>
+        <View style={[styles.filtersContainer, { paddingHorizontal: isMobile ? 0 : containerPadding, paddingBottom: isMobile ? 4 : spacing.xs }]}>
           {!isMobile && (
             <Text
               variant="labelMedium"
@@ -447,9 +486,10 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 key={status}
                 selected={statusFilter === status}
                 onPress={() => setStatusFilter(status)}
-                style={styles.filterChip}
+                style={[styles.filterChip, isMobile && styles.filterChipMobile]}
                 mode={statusFilter === status ? 'flat' : 'outlined'}
                 compact={isMobile}
+                textStyle={isMobile ? styles.filterChipTextMobile : undefined}
               >
                 {status.charAt(0).toUpperCase() + status.slice(1)}
               </Chip>
@@ -461,71 +501,184 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               onPress={() => setShowStaleOnly(!showStaleOnly)}
               compact={isMobile}
               icon={showStaleOnly ? 'clock-alert' : 'clock-outline'}
-              style={{
-                backgroundColor: showStaleOnly ? currentTheme.coral : theme.colors.surface,
-                borderColor: currentTheme.coral,
-                borderWidth: showStaleOnly ? 0 : 1,
-                marginLeft: spacing.sm,
-              }}
-              textStyle={{ color: showStaleOnly ? '#fff' : currentTheme.coral }}
+              style={[
+                {
+                  backgroundColor: showStaleOnly ? currentTheme.coral : theme.colors.surface,
+                  borderColor: currentTheme.coral,
+                  borderWidth: showStaleOnly ? 0 : 1,
+                  marginLeft: isMobile ? 6 : spacing.sm,
+                },
+                isMobile && styles.filterChipMobile,
+              ]}
+              textStyle={[
+                { color: showStaleOnly ? '#fff' : currentTheme.coral },
+                isMobile && styles.filterChipTextMobile,
+              ]}
             >
               Stale Only
             </Chip>
           </ScrollView>
         </View>
 
-        {/* Lead Count */}
-        <View style={[styles.countContainer, { paddingHorizontal: containerPadding }]}>
-          <Text
-            variant="titleMedium"
-            style={{
-              color: theme.colors.onSurface,
-              fontWeight: '700',
-              fontSize: 17,
-              letterSpacing: -0.3,
-            }}
-          >
-            {filteredLeads.length} {filteredLeads.length === 1 ? 'Lead' : 'Leads'}
-          </Text>
-          {searchQuery || statusFilter !== 'all' || selectedPermitType !== 'all' ? (
-            <Text
-              variant="bodySmall"
-              style={{
-                color: theme.colors.onSurfaceVariant,
-                marginTop: spacing.xs,
-                fontSize: 13,
+        {/* Lead Count with Grouping Toggle */}
+        <View style={[styles.countContainer, { paddingHorizontal: containerPadding, paddingBottom: isMobile ? 4 : spacing.xs, paddingTop: isMobile ? 4 : spacing.xs }]}>
+          <View style={styles.countRow}>
+            <View style={{ flex: 1 }}>
+              <Text
+                variant="titleMedium"
+                style={{
+                  color: theme.colors.onSurface,
+                  fontWeight: '700',
+                  fontSize: isMobile ? 15 : 17,
+                  letterSpacing: -0.3,
+                }}
+              >
+                {filteredLeads.length} {filteredLeads.length === 1 ? 'Lead' : 'Leads'}
+              </Text>
+              {searchQuery || statusFilter !== 'all' || selectedPermitType !== 'all' ? (
+                <Text
+                  variant="bodySmall"
+                  style={{
+                    color: theme.colors.onSurfaceVariant,
+                    marginTop: isMobile ? 2 : spacing.xs,
+                    fontSize: isMobile ? 11 : 13,
+                  }}
+                >
+                  Filtered from {leads.length} total
+                </Text>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                haptics.light();
+                setGroupByTime(!groupByTime);
               }}
+              style={[
+                styles.groupToggle,
+                {
+                  backgroundColor: groupByTime
+                    ? currentTheme.primary + '15'
+                    : currentTheme.surface,
+                  borderColor: groupByTime
+                    ? currentTheme.primary
+                    : currentTheme.border,
+                },
+              ]}
             >
-              Filtered from {leads.length} total
-            </Text>
-          ) : null}
+              <Icon
+                name={groupByTime ? 'calendar-clock' : 'format-list-bulleted'}
+                size={16}
+                color={groupByTime ? currentTheme.primary : currentTheme.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.groupToggleText,
+                  {
+                    color: groupByTime ? currentTheme.primary : currentTheme.textSecondary,
+                  },
+                ]}
+              >
+                {groupByTime ? 'Grouped' : 'List'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Leads List */}
-        <FlatList
-          data={filteredLeads}
-          renderItem={renderLeadCard}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.list, { padding: containerPadding, paddingTop: 0 }]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon="folder-open-outline"
-              title="No Leads Found"
-              description={
-                searchQuery || statusFilter !== 'all'
-                  ? 'Try adjusting your filters or search query'
-                  : 'Get started by importing leads or creating new ones'
-              }
-            />
-          }
-        />
+        {isLoading ? (
+          <DashboardSkeleton count={isMobile ? 5 : 8} />
+        ) : (
+          <SectionList
+            sections={leadSections}
+            renderItem={renderLeadCard}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[styles.list, { padding: containerPadding, paddingTop: 0 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            renderSectionHeader={({ section }) => {
+              // Don't render header if grouping is disabled or title is empty
+              if (!groupByTime || !section.title) return null;
+
+              return (
+                <View
+                  style={[
+                    styles.sectionHeader,
+                    {
+                      backgroundColor: theme.dark
+                        ? 'rgba(255, 255, 255, 0.05)'
+                        : 'rgba(0, 0, 0, 0.03)',
+                      borderBottomColor: currentTheme.border,
+                      borderLeftColor: currentTheme.primary,
+                    },
+                  ]}
+                >
+                  <Icon
+                    name="calendar-clock"
+                    size={14}
+                    color={currentTheme.primary}
+                    style={{ marginRight: spacing.xs }}
+                  />
+                  <Text
+                    style={[
+                      styles.sectionHeaderText,
+                      { color: currentTheme.text },
+                    ]}
+                  >
+                    {section.title}
+                  </Text>
+                </View>
+              );
+            }}
+            stickySectionHeadersEnabled={true}
+            ListEmptyComponent={
+              searchQuery || statusFilter !== 'all' || selectedPermitType !== 'all' ? (
+                // Filtered results empty state
+                <EmptyState
+                  icon="filter-off-outline"
+                  title="No Leads Match Your Filters"
+                  description="Try adjusting your filters or search query to see more results"
+                  variant="minimal"
+                  primaryAction={{
+                    label: 'Clear Filters',
+                    onPress: () => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      setSelectedPermitType('all');
+                      setShowStaleOnly(false);
+                    },
+                    icon: 'filter-remove',
+                  }}
+                  helpText="Tip: Use the 'All Permits' filter to see all your leads at once"
+                />
+              ) : (
+                // Initial empty state (no leads at all)
+                <EmptyState
+                  icon="folder-open-outline"
+                  title="No Leads Yet"
+                  description="Your lead pipeline is empty. Get started by importing leads from your permit data source."
+                  variant="educational"
+                  tips={[
+                    'Leads are automatically synced from your permit database',
+                    'Filter by permit type to focus on specific opportunities',
+                    'Use templates to quickly reach out to homeowners',
+                  ]}
+                  sampleItems={['Pool Permits', 'Kitchen & Bath', 'Roof Permits']}
+                  helpText="Need help getting started? Check your data source connection in Settings"
+                  primaryAction={{
+                    label: 'Go to Settings',
+                    onPress: () => navigation.navigate('Settings'),
+                    icon: 'cog-outline',
+                  }}
+                />
+              )
+            }
+          />
+        )}
       </WebContainer>
 
-      {/* Template Selection Dialog */}
+      {/* Template Selection Dialog (Web only - Mobile uses BottomSheet) */}
       <Portal>
         <Dialog
           visible={showTemplateDialog}
@@ -584,7 +737,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                               const encodedBody = encodeURIComponent(populatedBody);
                               const mailtoURL = `mailto:${primaryEmail}?subject=${encodedSubject}&body=${encodedBody}`;
                               Linking.openURL(mailtoURL);
-                              setShowTemplateDialog(false);
+                              if (Platform.OS === 'web') {
+                                setShowTemplateDialog(false);
+                              } else {
+                                templateBottomSheetRef.current?.dismiss();
+                              }
                             }}
                           >
                             <Icon name="email-open-outline" size={18} color={currentTheme.primary} />
@@ -643,7 +800,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                                 ? `sms:${primaryPhone}&body=${encodedBody}`
                                 : `sms:${primaryPhone}?body=${encodedBody}`;
                               Linking.openURL(smsURL);
-                              setShowTemplateDialog(false);
+                              if (Platform.OS === 'web') {
+                                setShowTemplateDialog(false);
+                              } else {
+                                templateBottomSheetRef.current?.dismiss();
+                              }
                             }}
                           >
                             <Icon name="message-text-outline" size={18} color={currentTheme.primary} />
@@ -680,18 +841,154 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </Dialog>
       </Portal>
 
-      {/* Success/Error Snackbar */}
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={2000}
-        style={{ backgroundColor: currentTheme.surface }}
-      >
-        <Text style={{ fontFamily: 'DMSans_500Medium', color: currentTheme.text }}>
-          {snackbarMessage}
-        </Text>
-      </Snackbar>
-    </View>
+      {/* Template Selection Bottom Sheet (Mobile only) */}
+      {Platform.OS !== 'web' && (
+        <BottomSheet
+          ref={templateBottomSheetRef}
+          title="Select Template"
+          snapPoints={['65%', '90%']}
+        >
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Homeowner Email Templates */}
+            {templates.filter(t => t.category === 'homeowner_email').length > 0 && (
+              <>
+                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 11, letterSpacing: 0.8, color: currentTheme.textSecondary, marginBottom: spacing.xs }}>
+                  HOMEOWNER EMAIL
+                </Text>
+                {templates
+                  .filter(t => t.category === 'homeowner_email')
+                  .map(template => (
+                    <View
+                      key={template.id}
+                      style={[
+                        styles.templateItem,
+                        {
+                          backgroundColor: currentTheme.surface,
+                          borderColor: currentTheme.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: currentTheme.text }}>
+                          {template.name}
+                        </Text>
+                        {template.subject && (
+                          <Text style={{ fontFamily: 'DMSans_500Medium', fontSize: 11, color: currentTheme.textSecondary, marginTop: 2 }}>
+                            Subject: {template.subject}
+                          </Text>
+                        )}
+                        <Text
+                          style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: currentTheme.textTertiary, marginTop: spacing.xs }}
+                          numberOfLines={2}
+                        >
+                          {template.body}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                        <TouchableOpacity
+                          style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                          onPress={() => {
+                            if (!selectedLead) return;
+                            const populatedBody = replaceTemplateVariables(template.body, selectedLead);
+                            const populatedSubject = template.subject ? replaceTemplateVariables(template.subject, selectedLead) : '';
+                            const primaryEmail = selectedLead.emails?.[0] || '';
+                            const encodedSubject = encodeURIComponent(populatedSubject);
+                            const encodedBody = encodeURIComponent(populatedBody);
+                            const mailtoURL = `mailto:${primaryEmail}?subject=${encodedSubject}&body=${encodedBody}`;
+                            Linking.openURL(mailtoURL);
+                            templateBottomSheetRef.current?.dismiss();
+                          }}
+                        >
+                          <Icon name="email-open-outline" size={18} color={currentTheme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                          onPress={() => handleCopyTemplate(template)}
+                        >
+                          <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+              </>
+            )}
+
+            {/* Homeowner SMS Templates */}
+            {templates.filter(t => t.category === 'homeowner_text').length > 0 && (
+              <>
+                <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 11, letterSpacing: 0.8, color: currentTheme.textSecondary, marginTop: spacing.md, marginBottom: spacing.xs }}>
+                  HOMEOWNER TEXT MESSAGE
+                </Text>
+                {templates
+                  .filter(t => t.category === 'homeowner_text')
+                  .map(template => (
+                    <View
+                      key={template.id}
+                      style={[
+                        styles.templateItem,
+                        {
+                          backgroundColor: currentTheme.surface,
+                          borderColor: currentTheme.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: currentTheme.text }}>
+                          {template.name}
+                        </Text>
+                        <Text
+                          style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: currentTheme.textTertiary, marginTop: spacing.xs }}
+                          numberOfLines={2}
+                        >
+                          {template.body}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                        <TouchableOpacity
+                          style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                          onPress={() => {
+                            if (!selectedLead) return;
+                            const populatedBody = replaceTemplateVariables(template.body, selectedLead);
+                            const primaryPhone = selectedLead.phoneNumbers?.[0] || '';
+                            const encodedBody = encodeURIComponent(populatedBody);
+                            const smsURL = Platform.OS === 'ios'
+                              ? `sms:${primaryPhone}&body=${encodedBody}`
+                              : `sms:${primaryPhone}?body=${encodedBody}`;
+                            Linking.openURL(smsURL);
+                            templateBottomSheetRef.current?.dismiss();
+                          }}
+                        >
+                          <Icon name="message-text-outline" size={18} color={currentTheme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                          onPress={() => handleCopyTemplate(template)}
+                        >
+                          <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+              </>
+            )}
+
+            {/* No templates message */}
+            {templates.filter(t => t.category === 'homeowner_email' || t.category === 'homeowner_text').length === 0 && (
+              <View style={{ padding: spacing.lg, alignItems: 'center' }}>
+                <Icon name="text-box-off-outline" size={48} color={currentTheme.textTertiary} />
+                <Text style={{ fontFamily: 'DMSans_600SemiBold', fontSize: 14, color: currentTheme.textSecondary, marginTop: spacing.md, textAlign: 'center' }}>
+                  No homeowner templates available
+                </Text>
+                <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: currentTheme.textTertiary, marginTop: spacing.xs, textAlign: 'center' }}>
+                  Create templates in the Templates tab
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </BottomSheet>
+      )}
+
+    </SafeAreaView>
   );
 }
 
@@ -876,23 +1173,21 @@ const styles = StyleSheet.create({
     elevation: 2,               // Slight elevation
   },
   searchBarMobile: {
-    height: 44,                 // Larger touch target
+    height: 38,                 // Compact for more space
     borderRadius: borderRadius.lg,
   },
   searchInputMobile: {
-    fontSize: 15,               // Slightly larger
+    fontSize: 14,               // Compact font size
     minHeight: 0,
   },
   filtersContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: spacing.xs,
     paddingTop: 0,
   },
   filters: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
   },
   filterLabel: {
     marginRight: spacing.sm,
@@ -902,9 +1197,37 @@ const styles = StyleSheet.create({
   filterChip: {
     marginRight: spacing.xs,
   },
+  filterChipMobile: {
+    height: 28,                 // Compact height
+    marginVertical: 0,
+    marginRight: 6,             // Tighter spacing between chips
+  },
+  filterChipTextMobile: {
+    fontSize: 12,               // Smaller text
+    marginVertical: 0,
+  },
   countContainer: {
     paddingBottom: spacing.xs,
     paddingTop: spacing.xs,
+  },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  groupToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+  },
+  groupToggleText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 12,
   },
   list: {
     paddingTop: 0,
@@ -925,5 +1248,22 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderLeftWidth: 3,
+    marginBottom: spacing.md,
+    marginTop: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  sectionHeaderText: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
 });

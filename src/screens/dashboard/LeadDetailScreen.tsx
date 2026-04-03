@@ -3,8 +3,9 @@
  * Shows complete information about a lead with edit capability
  */
 
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Linking, Platform, Alert, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, ScrollView, Linking, Platform, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   Card,
@@ -15,13 +16,13 @@ import {
   IconButton,
   List,
   Surface,
-  Snackbar,
   TextInput,
   Menu,
   Dialog,
   Portal,
 } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import BottomSheetModal, { BottomSheetView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import * as Clipboard from 'expo-clipboard';
 import { useLeadsStore, useAuthStore } from '../../store';
 import { getStatusColor, lightTheme, darkTheme, spacing, borderRadius, shadows } from '../../theme';
@@ -32,6 +33,9 @@ import { subscribeToTemplates, incrementTemplateUsage } from '../../services/tem
 import { useResponsive } from '../../hooks/useResponsive';
 import EmptyState from '../../components/EmptyState';
 import { StatusBadge } from '../../components/StatusBadge';
+import { BottomSheet } from '../../components';
+import { showToast } from '../../utils/toast';
+import { haptics } from '../../utils/haptics';
 
 interface LeadDetailScreenProps {
   route: {
@@ -65,8 +69,6 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
   const [showMessageDialog, setShowMessageDialog] = useState(false);
   const [messageType, setMessageType] = useState<'sms' | 'email'>('sms');
   const [selectedRecipient, setSelectedRecipient] = useState<string>('');
@@ -77,6 +79,10 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templateDialogMode, setTemplateDialogMode] = useState<'homeowner' | 'contractor'>('homeowner');
   const [templates, setTemplates] = useState<Template[]>([]);
+
+  // Bottom sheet refs for mobile
+  const noteBottomSheetRef = useRef<BottomSheetModal>(null);
+  const templateBottomSheetRef = useRef<BottomSheetModal>(null);
 
   // Debug logging
   if (lead) {
@@ -103,7 +109,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
 
   if (!lead) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
         <View style={styles.errorContainer}>
           <Icon name="alert-circle" size={64} color={theme.colors.error} />
           <Text variant="titleLarge" style={{ marginTop: spacing.md }}>
@@ -113,7 +119,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
             Go Back
           </Button>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -135,17 +141,14 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
     setIsSaving(true);
     try {
       await updateLead(leadId, editedLead);
-      setSnackbarMessage('Lead updated successfully');
-      setSnackbarVisible(true);
+      haptics.success();
+      showToast.success('Lead updated successfully!');
       setIsEditing(false);
       setEditedLead(null);
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to update lead';
-      if (Platform.OS === 'web') {
-        window.alert(`Error: ${errorMessage}`);
-      } else {
-        Alert.alert('Error', errorMessage);
-      }
+      haptics.error();
+      showToast.error('Failed to update lead', errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -194,8 +197,8 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
 
   const handleCopy = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
-    setSnackbarMessage(`${label} copied to clipboard`);
-    setSnackbarVisible(true);
+    haptics.light();
+    showToast.success('Copied!', `${label} copied to clipboard`);
   };
 
   const replaceTemplateVariables = (text: string): string => {
@@ -241,6 +244,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
 
   const handleCopyTemplate = async (template: Template) => {
     try {
+      haptics.light();
       // Replace variables in body and subject
       const populatedBody = replaceTemplateVariables(template.body);
       const populatedSubject = template.subject ? replaceTemplateVariables(template.subject) : '';
@@ -252,16 +256,17 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
 
       await Clipboard.setStringAsync(textToCopy);
       await incrementTemplateUsage(template.id);
-      setSnackbarMessage(`Template "${template.name}" copied with lead data`);
-      setSnackbarVisible(true);
-      setShowTemplateDialog(false);
+      haptics.success();
+      showToast.success('Template copied!', `"${template.name}" copied with lead data`);
+      if (Platform.OS === 'web') {
+        setShowTemplateDialog(false);
+      } else {
+        templateBottomSheetRef.current?.dismiss();
+      }
     } catch (error) {
       console.error('Error copying template:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Failed to copy template');
-      } else {
-        Alert.alert('Error', 'Failed to copy template');
-      }
+      haptics.error();
+      showToast.error('Failed to copy template', 'Please try again');
     }
   };
 
@@ -275,7 +280,11 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
 
   const handleAddNote = async () => {
     if (!newNote.trim()) {
-      setShowNoteDialog(false);
+      if (Platform.OS === 'web') {
+        setShowNoteDialog(false);
+      } else {
+        noteBottomSheetRef.current?.dismiss();
+      }
       setNewNote('');
       return;
     }
@@ -288,17 +297,18 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
         : noteWithTimestamp;
 
       await updateLead(leadId, { notes: updatedNotes });
-      setSnackbarMessage('Note added successfully');
-      setSnackbarVisible(true);
-      setShowNoteDialog(false);
+      haptics.success();
+      showToast.success('Note added successfully!');
+      if (Platform.OS === 'web') {
+        setShowNoteDialog(false);
+      } else {
+        noteBottomSheetRef.current?.dismiss();
+      }
       setNewNote('');
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to add note';
-      if (Platform.OS === 'web') {
-        window.alert(`Error: ${errorMessage}`);
-      } else {
-        Alert.alert('Error', errorMessage);
-      }
+      haptics.error();
+      showToast.error('Failed to add note', errorMessage);
     }
   };
 
@@ -328,24 +338,20 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
 
       await updateLead(leadId, updates);
 
-      setSnackbarMessage(
-        lead?.status === 'new'
-          ? 'Lead marked as contacted and status updated'
-          : 'Lead marked as contacted'
+      haptics.success();
+      showToast.success(
+        'Lead marked as contacted!',
+        lead?.status === 'new' ? 'Status updated to Contacted' : undefined
       );
-      setSnackbarVisible(true);
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to mark as contacted';
-      if (Platform.OS === 'web') {
-        window.alert(`Error: ${errorMessage}`);
-      } else {
-        Alert.alert('Error', errorMessage);
-      }
+      haptics.error();
+      showToast.error('Failed to mark as contacted', errorMessage);
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
       <WebContainer maxWidth="lg">
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Back Button */}
@@ -381,7 +387,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                   </Text>
                 )}
                 <View style={styles.addressRow}>
-                  <Icon name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+                  <Icon name="map-marker" size={16} color={theme.colors.onSurfaceVariant} style={{ marginTop: 1 }} />
                   <Text style={[styles.address, { color: theme.colors.onSurfaceVariant }]}>
                     {currentLead.fullAddress || currentLead.city && currentLead.state
                       ? `${currentLead.city}, ${currentLead.state} ${currentLead.zipCode || ''}`
@@ -449,8 +455,8 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                         status: status.value,
                         statusHistory: updatedStatusHistory,
                       });
-                      setSnackbarMessage(`Status updated to ${status.label}`);
-                      setSnackbarVisible(true);
+                      haptics.success();
+                      showToast.success('Status updated!', `Changed to ${status.label}`);
                     }
                   }}
                 >
@@ -562,8 +568,8 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
             ) : (
               currentLead.fullAddress && (
                 <View style={styles.contactItem}>
-                  <View style={styles.contactInfo}>
-                    <Icon name="map-marker" size={16} color={currentTheme.textSecondary} style={{ marginRight: spacing.xs }} />
+                  <View style={[styles.contactInfo, { flexDirection: 'row', alignItems: 'flex-start' }]}>
+                    <Icon name="map-marker" size={16} color={currentTheme.textSecondary} style={{ marginRight: spacing.xs, marginTop: 2 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.contactValue, { color: theme.colors.onSurfaceVariant }]}>
                         {currentLead.fullAddress}
@@ -696,7 +702,11 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                   }]}
                   onPress={() => {
                     setTemplateDialogMode('homeowner');
-                    setShowTemplateDialog(true);
+                    if (Platform.OS === 'web') {
+                      setShowTemplateDialog(true);
+                    } else {
+                      templateBottomSheetRef.current?.present();
+                    }
                   }}
                 >
                   <Icon name="text-box-multiple" size={18} color={currentTheme.primary} />
@@ -886,7 +896,11 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                   }]}
                   onPress={() => {
                     setTemplateDialogMode('contractor');
-                    setShowTemplateDialog(true);
+                    if (Platform.OS === 'web') {
+                      setShowTemplateDialog(true);
+                    } else {
+                      templateBottomSheetRef.current?.present();
+                    }
                   }}
                 >
                   <Icon name="text-box-multiple" size={18} color={currentTheme.secondary} />
@@ -1099,7 +1113,13 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.addNoteButton, { borderColor: currentTheme.border, flex: 1 }]}
-                    onPress={() => setShowNoteDialog(true)}
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        setShowNoteDialog(true);
+                      } else {
+                        noteBottomSheetRef.current?.present();
+                      }
+                    }}
                   >
                     <Icon name="plus" size={16} color={theme.colors.onSurfaceVariant} />
                     <Text style={[styles.addNoteText, { color: theme.colors.onSurfaceVariant }]}>Add note</Text>
@@ -1207,7 +1227,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
         }}
       />
 
-      {/* Add Note Dialog */}
+      {/* Add Note Dialog (Web only - Mobile uses BottomSheet) */}
       <Portal>
         <Dialog
           visible={showNoteDialog}
@@ -1246,7 +1266,7 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
         </Dialog>
       </Portal>
 
-      {/* Template Selection Dialog */}
+      {/* Template Selection Dialog (Web only - Mobile uses BottomSheet) */}
       <Portal>
         <Dialog
           visible={showTemplateDialog}
@@ -1303,7 +1323,11 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                                   const encodedBody = encodeURIComponent(populatedBody);
                                   const mailtoURL = `mailto:${primaryEmail}?subject=${encodedSubject}&body=${encodedBody}`;
                                   Linking.openURL(mailtoURL);
-                                  setShowTemplateDialog(false);
+                                  if (Platform.OS === 'web') {
+                                    setShowTemplateDialog(false);
+                                  } else {
+                                    templateBottomSheetRef.current?.dismiss();
+                                  }
                                 }}
                               >
                                 <Icon name="email-open-outline" size={18} color={currentTheme.primary} />
@@ -1358,7 +1382,11 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
                                     ? `sms:${primaryPhone}&body=${encodedBody}`
                                     : `sms:${primaryPhone}?body=${encodedBody}`;
                                   Linking.openURL(smsURL);
-                                  setShowTemplateDialog(false);
+                                  if (Platform.OS === 'web') {
+                                    setShowTemplateDialog(false);
+                                  } else {
+                                    templateBottomSheetRef.current?.dismiss();
+                                  }
                                 }}
                               >
                                 <Icon name="message-text-outline" size={18} color={currentTheme.primary} />
@@ -1473,19 +1501,265 @@ export default function LeadDetailScreen({ route, navigation }: LeadDetailScreen
         </Dialog>
       </Portal>
 
-      {/* Copy Feedback Snackbar */}
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={2000}
-        action={{
-          label: 'OK',
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
-    </View>
+      {/* Add Note Bottom Sheet (Mobile only) */}
+      {Platform.OS !== 'web' && (
+        <BottomSheet
+          ref={noteBottomSheetRef}
+          title="Add Note"
+          snapPoints={['50%']}
+        >
+          <View style={{ paddingBottom: spacing.xl }}>
+            <TextInput
+              label="Note"
+              value={newNote}
+              onChangeText={setNewNote}
+              mode="outlined"
+              multiline
+              numberOfLines={6}
+              placeholder="Enter your note here..."
+              autoFocus
+              style={{ marginBottom: spacing.md }}
+            />
+            <View style={{ flexDirection: 'row', gap: spacing.md, justifyContent: 'flex-end' }}>
+              <Button
+                onPress={() => {
+                  noteBottomSheetRef.current?.dismiss();
+                  setNewNote('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onPress={handleAddNote} mode="contained">
+                Save Note
+              </Button>
+            </View>
+          </View>
+        </BottomSheet>
+      )}
+
+      {/* Template Selection Bottom Sheet (Mobile only) */}
+      {Platform.OS !== 'web' && (
+        <BottomSheet
+          ref={templateBottomSheetRef}
+          title={templateDialogMode === 'homeowner' ? 'Homeowner Templates' : 'Contractor Templates'}
+          snapPoints={['65%', '90%']}
+        >
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {templateDialogMode === 'homeowner' ? (
+              <>
+                {/* Homeowner Email Templates */}
+                {templates.filter(t => t.category === 'homeowner_email').length > 0 && (
+                  <>
+                    <Text style={[styles.templateSectionLabel, { color: currentTheme.primary }]}>
+                      EMAIL TEMPLATES
+                    </Text>
+                    {templates
+                      .filter(t => t.category === 'homeowner_email')
+                      .map((template) => (
+                        <View
+                          key={template.id}
+                          style={[
+                            styles.templateItem,
+                            {
+                              backgroundColor: currentTheme.surface,
+                              borderColor: currentTheme.border,
+                            },
+                          ]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                              {template.name}
+                            </Text>
+                            {template.subject && (
+                              <Text style={[styles.templateSubject, { color: theme.colors.onSurfaceVariant }]}>
+                                Subject: {template.subject}
+                              </Text>
+                            )}
+                            <Text
+                              style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                              numberOfLines={2}
+                            >
+                              {template.body}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                            <TouchableOpacity
+                              style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                              onPress={() => {
+                                const populatedBody = replaceTemplateVariables(template.body);
+                                const populatedSubject = template.subject ? replaceTemplateVariables(template.subject) : '';
+                                const primaryEmail = lead?.emails?.[0] || '';
+                                const encodedSubject = encodeURIComponent(populatedSubject);
+                                const encodedBody = encodeURIComponent(populatedBody);
+                                const mailtoURL = `mailto:${primaryEmail}?subject=${encodedSubject}&body=${encodedBody}`;
+                                Linking.openURL(mailtoURL);
+                                templateBottomSheetRef.current?.dismiss();
+                              }}
+                            >
+                              <Icon name="email-open-outline" size={18} color={currentTheme.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                              onPress={() => handleCopyTemplate(template)}
+                            >
+                              <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                  </>
+                )}
+
+                {/* Homeowner SMS Templates */}
+                {templates.filter(t => t.category === 'homeowner_text').length > 0 && (
+                  <>
+                    <Text style={[styles.templateSectionLabel, { color: currentTheme.primary, marginTop: spacing.lg }]}>
+                      SMS TEMPLATES
+                    </Text>
+                    {templates
+                      .filter(t => t.category === 'homeowner_text')
+                      .map((template) => (
+                        <View
+                          key={template.id}
+                          style={[
+                            styles.templateItem,
+                            {
+                              backgroundColor: currentTheme.surface,
+                              borderColor: currentTheme.border,
+                            },
+                          ]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                              {template.name}
+                            </Text>
+                            <Text
+                              style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                              numberOfLines={2}
+                            >
+                              {template.body}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                            <TouchableOpacity
+                              style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                              onPress={() => {
+                                const populatedBody = replaceTemplateVariables(template.body);
+                                const primaryPhone = lead?.phoneNumbers?.[0] || '';
+                                const encodedBody = encodeURIComponent(populatedBody);
+                                const smsURL = Platform.OS === 'ios'
+                                  ? `sms:${primaryPhone}&body=${encodedBody}`
+                                  : `sms:${primaryPhone}?body=${encodedBody}`;
+                                Linking.openURL(smsURL);
+                                templateBottomSheetRef.current?.dismiss();
+                              }}
+                            >
+                              <Icon name="message-text-outline" size={18} color={currentTheme.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.templateActionButton, { backgroundColor: currentTheme.primary + '15' }]}
+                              onPress={() => handleCopyTemplate(template)}
+                            >
+                              <Icon name="content-copy" size={18} color={currentTheme.primary} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                  </>
+                )}
+
+                {templates.filter(t => t.category === 'homeowner_email' || t.category === 'homeowner_text').length === 0 && (
+                  <Text style={[styles.noTemplatesText, { color: currentTheme.textSecondary }]}>
+                    No homeowner templates available.
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Contractor Email Templates */}
+                {templates.filter(t => t.category === 'contractor_email').length > 0 && (
+                  <>
+                    <Text style={[styles.templateSectionLabel, { color: currentTheme.secondary }]}>
+                      EMAIL TEMPLATES
+                    </Text>
+                    {templates
+                      .filter(t => t.category === 'contractor_email')
+                      .map((template) => (
+                        <TouchableOpacity
+                          key={template.id}
+                          style={[styles.templateItem, {
+                            backgroundColor: currentTheme.surfaceElevated,
+                            borderColor: currentTheme.border,
+                          }]}
+                          onPress={() => handleCopyTemplate(template)}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                              {template.name}
+                            </Text>
+                            {template.subject && (
+                              <Text style={[styles.templateSubject, { color: theme.colors.onSurfaceVariant }]}>
+                                Subject: {template.subject}
+                              </Text>
+                            )}
+                            <Text
+                              style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                              numberOfLines={2}
+                            >
+                              {template.body}
+                            </Text>
+                          </View>
+                          <Icon name="content-copy" size={20} color={currentTheme.secondary} />
+                        </TouchableOpacity>
+                      ))}
+                  </>
+                )}
+
+                {/* Contractor SMS Templates */}
+                {templates.filter(t => t.category === 'contractor_text').length > 0 && (
+                  <>
+                    <Text style={[styles.templateSectionLabel, { color: currentTheme.secondary, marginTop: spacing.lg }]}>
+                      SMS TEMPLATES
+                    </Text>
+                    {templates
+                      .filter(t => t.category === 'contractor_text')
+                      .map((template) => (
+                        <TouchableOpacity
+                          key={template.id}
+                          style={[styles.templateItem, {
+                            backgroundColor: currentTheme.surfaceElevated,
+                            borderColor: currentTheme.border,
+                          }]}
+                          onPress={() => handleCopyTemplate(template)}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.templateName, { color: theme.colors.onSurface }]}>
+                              {template.name}
+                            </Text>
+                            <Text
+                              style={[styles.templatePreview, { color: currentTheme.textSecondary }]}
+                              numberOfLines={2}
+                            >
+                              {template.body}
+                            </Text>
+                          </View>
+                          <Icon name="content-copy" size={20} color={currentTheme.secondary} />
+                        </TouchableOpacity>
+                      ))}
+                  </>
+                )}
+
+                {templates.filter(t => t.category === 'contractor_email' || t.category === 'contractor_text').length === 0 && (
+                  <Text style={[styles.noTemplatesText, { color: currentTheme.textSecondary }]}>
+                    No contractor templates available.
+                  </Text>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </BottomSheet>
+      )}
+    </SafeAreaView>
   );
 }
 
@@ -1528,7 +1802,7 @@ const styles = StyleSheet.create({
   },
   addressRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.xs,
     marginTop: spacing.xs,
   },

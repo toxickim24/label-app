@@ -4,7 +4,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, ScrollView, Alert, Platform, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, ScrollView, Platform, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Card, Button, useTheme, Chip, Dialog, Portal, RadioButton, TextInput, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTemplatesStore } from '../../store';
@@ -22,6 +23,8 @@ import {
   deleteTemplate,
 } from '../../services/templatesService';
 import { getTemplateVariablesGuide, getAITemplateInstruction } from '../../utils/templateVariables';
+import { showToast } from '../../utils/toast';
+import { haptics } from '../../utils/haptics';
 
 const PROFESSIONAL_SALES_OPTIMIZATION = `Use consultative selling (help-first, not pushy).
 Sound natural and conversational — not robotic.
@@ -49,6 +52,8 @@ export default function TemplatesScreen() {
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory>('homeowner_email');
   const [customPrompt, setCustomPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showClearConfirmDialog, setShowClearConfirmDialog] = useState(false);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
 
   // Check if selected category should show optimization buttons
   const shouldShowOptimizationButtons = () => {
@@ -69,21 +74,15 @@ export default function TemplatesScreen() {
   // Clear custom instructions
   const handleClearInstructions = () => {
     if (customPrompt.trim() !== '') {
-      if (Platform.OS === 'web') {
-        if (window.confirm('Are you sure you want to clear all custom instructions?')) {
-          setCustomPrompt('');
-        }
-      } else {
-        Alert.alert(
-          'Clear Instructions',
-          'Are you sure you want to clear all custom instructions?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Clear', style: 'destructive', onPress: () => setCustomPrompt('') },
-          ]
-        );
-      }
+      setShowClearConfirmDialog(true);
     }
+  };
+
+  const confirmClearInstructions = () => {
+    haptics.light();
+    setCustomPrompt('');
+    setShowClearConfirmDialog(false);
+    showToast.info('Instructions cleared');
   };
 
   // Subscribe to Firestore templates in real-time
@@ -146,18 +145,12 @@ export default function TemplatesScreen() {
       setCustomPrompt('');
 
       // Show success message
-      if (Platform.OS === 'web') {
-        window.alert('Template generated successfully!');
-      } else {
-        Alert.alert('Success', 'Template generated successfully!');
-      }
+      haptics.success();
+      showToast.success('Template generated successfully!', 'Your AI template is ready to use');
     } catch (error) {
       console.error('Failed to generate template:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Failed to generate template. Please try again.');
-      } else {
-        Alert.alert('Error', 'Failed to generate template. Please try again.');
-      }
+      haptics.error();
+      showToast.error('Failed to generate template', 'Please try again');
     } finally {
       setIsGenerating(false);
     }
@@ -186,58 +179,35 @@ export default function TemplatesScreen() {
       setShowEditDialog(false);
       setSelectedTemplate(null);
 
-      if (Platform.OS === 'web') {
-        window.alert('Template updated successfully!');
-      } else {
-        Alert.alert('Success', 'Template updated successfully!');
-      }
+      haptics.success();
+      showToast.success('Template updated successfully!');
     } catch (error) {
       console.error('Failed to update template:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Failed to update template. Please try again.');
-      } else {
-        Alert.alert('Error', 'Failed to update template. Please try again.');
-      }
+      haptics.error();
+      showToast.error('Failed to update template', 'Please try again');
     }
   };
 
   const handleDeleteTemplate = () => {
     if (!selectedTemplate) return;
+    setShowDeleteConfirmDialog(true);
+  };
 
-    const confirmDelete = async () => {
-      try {
-        await deleteTemplate(selectedTemplate.id);
-        setShowEditDialog(false);
-        setSelectedTemplate(null);
+  const confirmDeleteTemplate = async () => {
+    if (!selectedTemplate) return;
 
-        if (Platform.OS === 'web') {
-          window.alert('Template deleted successfully!');
-        } else {
-          Alert.alert('Success', 'Template deleted successfully!');
-        }
-      } catch (error) {
-        console.error('Failed to delete template:', error);
-        if (Platform.OS === 'web') {
-          window.alert('Failed to delete template. Please try again.');
-        } else {
-          Alert.alert('Error', 'Failed to delete template. Please try again.');
-        }
-      }
-    };
+    try {
+      await deleteTemplate(selectedTemplate.id);
+      setShowDeleteConfirmDialog(false);
+      setShowEditDialog(false);
+      setSelectedTemplate(null);
 
-    if (Platform.OS === 'web') {
-      if (window.confirm('Are you sure you want to delete this template?')) {
-        confirmDelete();
-      }
-    } else {
-      Alert.alert(
-        'Delete Template',
-        'Are you sure you want to delete this template?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: confirmDelete },
-        ]
-      );
+      haptics.success();
+      showToast.success('Template deleted successfully!');
+    } catch (error) {
+      console.error('Failed to delete template:', error);
+      haptics.error();
+      showToast.error('Failed to delete template', 'Please try again');
     }
   };
 
@@ -321,7 +291,7 @@ export default function TemplatesScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
       <WebContainer maxWidth="xl">
         <View style={[styles.headerContainer, { padding: containerPadding, paddingBottom: spacing.sm }]}>
           <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 24, color: currentTheme.text }}>Templates</Text>
@@ -341,44 +311,154 @@ export default function TemplatesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.list, { padding: containerPadding, paddingTop: 0 }]}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Icon name="file-document-multiple-outline" size={64} color={theme.colors.secondary} />
-              <Text variant="titleMedium" style={{ color: theme.colors.secondary, marginTop: spacing.md }}>
-                No templates yet
-              </Text>
-              <Text variant="bodyMedium" style={{ color: theme.colors.secondary, marginTop: spacing.sm, textAlign: 'center' }}>
-                Create your first template with AI
-              </Text>
-            </View>
+            <EmptyState
+              icon="robot-outline"
+              title="No Templates Yet"
+              description="Generate professional email and SMS templates powered by AI. Customize them with lead-specific variables for personalized outreach."
+              variant="educational"
+              tips={[
+                'AI templates use dynamic variables like {firstName} and {permitType}',
+                'Templates are automatically populated with lead data when you use them',
+                'Apply sales optimization to create high-converting messages',
+              ]}
+              sampleItems={['Pool Email', 'Kitchen & Bath SMS', 'Roof Follow-up']}
+              helpText="Each template can be customized and edited after generation"
+              primaryAction={{
+                label: 'Generate with AI',
+                onPress: () => setShowDialog(true),
+                icon: 'auto-fix',
+              }}
+            />
           }
         />
       </WebContainer>
 
       <Portal>
-        <Dialog visible={showDialog} onDismiss={() => setShowDialog(false)} style={styles.dialog}>
-          <Dialog.Title>Generate AI Template</Dialog.Title>
-          <Dialog.ScrollArea>
+        <Dialog
+          visible={showDialog}
+          onDismiss={() => setShowDialog(false)}
+          style={[
+            styles.dialog,
+            {
+              backgroundColor: currentTheme.surface,
+              maxWidth: isMobile ? '95%' : 600,
+              alignSelf: 'center',
+            },
+          ]}
+        >
+          <Dialog.Title
+            style={{
+              fontFamily: 'DMSans_700Bold',
+              fontSize: isMobile ? 18 : 20,
+              color: currentTheme.text,
+              paddingHorizontal: isMobile ? spacing.md : spacing.lg,
+              paddingTop: isMobile ? spacing.md : spacing.lg,
+              paddingBottom: isMobile ? spacing.sm : spacing.md,
+            }}
+          >
+            Generate AI Template
+          </Dialog.Title>
+          <Dialog.ScrollArea style={{ paddingHorizontal: 0 }}>
             <ScrollView>
-              <View style={styles.dialogContent}>
-                <Text variant="labelLarge" style={styles.sectionLabel}>Permit Type</Text>
+              <View style={[styles.dialogContent, { paddingHorizontal: isMobile ? spacing.md : spacing.lg }]}>
+                <Text
+                  style={{
+                    fontFamily: 'DMSans_700Bold',
+                    fontSize: isMobile ? 11 : 12,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                    color: currentTheme.textSecondary,
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  Permit Type
+                </Text>
                 <RadioButton.Group
                   onValueChange={(value) => setSelectedPermitType(value as PermitType)}
                   value={selectedPermitType}
                 >
-                  <RadioButton.Item label="Pool Permits" value="pool_permits" />
-                  <RadioButton.Item label="Kitchen & Bath Permits" value="kitchen_bath_permits" />
-                  <RadioButton.Item label="Roof Permits" value="roof_permits" />
+                  <RadioButton.Item
+                    label="Pool Permits"
+                    value="pool_permits"
+                    labelStyle={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: isMobile ? 14 : 15,
+                      color: currentTheme.text,
+                    }}
+                  />
+                  <RadioButton.Item
+                    label="Kitchen & Bath Permits"
+                    value="kitchen_bath_permits"
+                    labelStyle={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: isMobile ? 14 : 15,
+                      color: currentTheme.text,
+                    }}
+                  />
+                  <RadioButton.Item
+                    label="Roof Permits"
+                    value="roof_permits"
+                    labelStyle={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: isMobile ? 14 : 15,
+                      color: currentTheme.text,
+                    }}
+                  />
                 </RadioButton.Group>
 
-                <Text variant="labelLarge" style={[styles.sectionLabel, { marginTop: spacing.md }]}>Template Category</Text>
+                <Text
+                  style={{
+                    fontFamily: 'DMSans_700Bold',
+                    fontSize: isMobile ? 11 : 12,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                    color: currentTheme.textSecondary,
+                    marginTop: isMobile ? spacing.sm : spacing.md,
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  Template Category
+                </Text>
                 <RadioButton.Group
                   onValueChange={(value) => setSelectedCategory(value as TemplateCategory)}
                   value={selectedCategory}
                 >
-                  <RadioButton.Item label="Homeowner Email" value="homeowner_email" />
-                  <RadioButton.Item label="Homeowner Text (SMS)" value="homeowner_text" />
-                  <RadioButton.Item label="Contractor Email" value="contractor_email" />
-                  <RadioButton.Item label="Contractor Text (SMS)" value="contractor_text" />
+                  <RadioButton.Item
+                    label="Homeowner Email"
+                    value="homeowner_email"
+                    labelStyle={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: isMobile ? 14 : 15,
+                      color: currentTheme.text,
+                    }}
+                  />
+                  <RadioButton.Item
+                    label="Homeowner Text (SMS)"
+                    value="homeowner_text"
+                    labelStyle={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: isMobile ? 14 : 15,
+                      color: currentTheme.text,
+                    }}
+                  />
+                  <RadioButton.Item
+                    label="Contractor Email"
+                    value="contractor_email"
+                    labelStyle={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: isMobile ? 14 : 15,
+                      color: currentTheme.text,
+                    }}
+                  />
+                  <RadioButton.Item
+                    label="Contractor Text (SMS)"
+                    value="contractor_text"
+                    labelStyle={{
+                      fontFamily: 'DMSans_500Medium',
+                      fontSize: isMobile ? 14 : 15,
+                      color: currentTheme.text,
+                    }}
+                  />
                 </RadioButton.Group>
 
                 <TextInput
@@ -387,20 +467,37 @@ export default function TemplatesScreen() {
                   onChangeText={setCustomPrompt}
                   multiline
                   mode="outlined"
-                  style={{ marginTop: spacing.md, minHeight: 180, maxHeight: 400 }}
+                  style={{
+                    marginTop: isMobile ? spacing.sm : spacing.md,
+                    minHeight: isMobile ? 140 : 180,
+                    maxHeight: isMobile ? 300 : 400,
+                  }}
                   placeholder="E.g., Make it more formal, include pricing info, etc."
                   contentStyle={{ paddingTop: 8 }}
+                  theme={{
+                    colors: {
+                      text: currentTheme.text,
+                      placeholder: currentTheme.textSecondary,
+                      primary: currentTheme.primary,
+                    },
+                  }}
                 />
 
                 {/* Optimization Buttons - Only show for specific categories */}
                 {shouldShowOptimizationButtons() && (
-                  <View style={styles.optimizationButtons}>
+                  <View style={{ marginTop: isMobile ? spacing.sm : spacing.md, gap: spacing.sm }}>
                     <Button
                       mode="contained"
                       icon="auto-fix"
                       onPress={handleApplyOptimization}
-                      style={styles.optimizationButton}
-                      contentStyle={styles.optimizationButtonContent}
+                      buttonColor={currentTheme.primary}
+                      labelStyle={{
+                        fontFamily: 'DMSans_600SemiBold',
+                        fontSize: isMobile ? 12 : 14,
+                      }}
+                      contentStyle={{ paddingVertical: isMobile ? 6 : spacing.xs }}
+                      style={{ borderRadius: borderRadius.md }}
+                      compact={isMobile}
                     >
                       Apply Professional Sales Optimization
                     </Button>
@@ -408,8 +505,14 @@ export default function TemplatesScreen() {
                       mode="outlined"
                       icon="close-circle-outline"
                       onPress={handleClearInstructions}
-                      style={styles.clearButton}
                       disabled={customPrompt.trim() === ''}
+                      textColor={currentTheme.textSecondary}
+                      labelStyle={{
+                        fontFamily: 'DMSans_600SemiBold',
+                        fontSize: isMobile ? 12 : 14,
+                      }}
+                      style={{ borderRadius: borderRadius.md, borderColor: currentTheme.border }}
+                      compact={isMobile}
                     >
                       Clear Instructions
                     </Button>
@@ -453,13 +556,28 @@ export default function TemplatesScreen() {
                       ],
                     },
                   ]}
-                  style={{ marginTop: spacing.xl }}
+                  style={{ marginTop: isMobile ? spacing.md : spacing.xl }}
                 />
               </View>
             </ScrollView>
           </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <Button onPress={() => setShowDialog(false)} disabled={isGenerating}>
+          <Dialog.Actions
+            style={{
+              paddingHorizontal: isMobile ? spacing.md : spacing.lg,
+              paddingTop: isMobile ? spacing.sm : spacing.md,
+              paddingBottom: isMobile ? spacing.md : spacing.lg,
+            }}
+          >
+            <Button
+              onPress={() => setShowDialog(false)}
+              disabled={isGenerating}
+              labelStyle={{
+                fontFamily: 'DMSans_600SemiBold',
+                fontSize: isMobile ? 13 : 14,
+                color: currentTheme.textSecondary,
+              }}
+              compact={isMobile}
+            >
               Cancel
             </Button>
             <Button
@@ -467,23 +585,59 @@ export default function TemplatesScreen() {
               onPress={handleGenerateTemplate}
               disabled={isGenerating}
               loading={isGenerating}
+              buttonColor={currentTheme.primary}
+              labelStyle={{
+                fontFamily: 'DMSans_600SemiBold',
+                fontSize: isMobile ? 13 : 14,
+              }}
+              compact={isMobile}
             >
               {isGenerating ? 'Generating...' : 'Generate'}
             </Button>
           </Dialog.Actions>
         </Dialog>
 
-        <Dialog visible={showEditDialog} onDismiss={() => setShowEditDialog(false)} style={styles.dialog}>
-          <Dialog.Title>Edit Template</Dialog.Title>
-          <Dialog.ScrollArea>
+        <Dialog
+          visible={showEditDialog}
+          onDismiss={() => setShowEditDialog(false)}
+          style={[
+            styles.dialog,
+            {
+              backgroundColor: currentTheme.surface,
+              maxWidth: isMobile ? '95%' : 600,
+              alignSelf: 'center',
+            },
+          ]}
+        >
+          <Dialog.Title
+            style={{
+              fontFamily: 'DMSans_700Bold',
+              fontSize: isMobile ? 18 : 20,
+              color: currentTheme.text,
+              paddingHorizontal: isMobile ? spacing.md : spacing.lg,
+              paddingTop: isMobile ? spacing.md : spacing.lg,
+              paddingBottom: isMobile ? spacing.sm : spacing.md,
+            }}
+          >
+            Edit Template
+          </Dialog.Title>
+          <Dialog.ScrollArea style={{ paddingHorizontal: 0 }}>
             <ScrollView>
-              <View style={styles.dialogContent}>
+              <View style={[styles.dialogContent, { paddingHorizontal: isMobile ? spacing.md : spacing.lg }]}>
                 <TextInput
                   label="Template Name"
                   value={editedName}
                   onChangeText={setEditedName}
                   mode="outlined"
-                  style={{ marginBottom: spacing.md }}
+                  dense={isMobile}
+                  style={{ marginBottom: isMobile ? spacing.sm : spacing.md }}
+                  theme={{
+                    colors: {
+                      text: currentTheme.text,
+                      placeholder: currentTheme.textSecondary,
+                      primary: currentTheme.primary,
+                    },
+                  }}
                 />
 
                 {selectedTemplate?.category.includes('email') && (
@@ -492,7 +646,15 @@ export default function TemplatesScreen() {
                     value={editedSubject}
                     onChangeText={setEditedSubject}
                     mode="outlined"
-                    style={{ marginBottom: spacing.md }}
+                    dense={isMobile}
+                    style={{ marginBottom: isMobile ? spacing.sm : spacing.md }}
+                    theme={{
+                      colors: {
+                        text: currentTheme.text,
+                        placeholder: currentTheme.textSecondary,
+                        primary: currentTheme.primary,
+                      },
+                    }}
                   />
                 )}
 
@@ -501,10 +663,20 @@ export default function TemplatesScreen() {
                   value={editedBody}
                   onChangeText={setEditedBody}
                   multiline
-                  numberOfLines={10}
+                  numberOfLines={isMobile ? 8 : 10}
                   mode="outlined"
-                  style={{ marginBottom: spacing.md }}
+                  style={{
+                    marginBottom: isMobile ? spacing.sm : spacing.md,
+                    minHeight: isMobile ? 160 : 200,
+                  }}
                   placeholder="Use variables like {firstName}, {fullAddress}, {permitType}..."
+                  theme={{
+                    colors: {
+                      text: currentTheme.text,
+                      placeholder: currentTheme.textSecondary,
+                      primary: currentTheme.primary,
+                    },
+                  }}
                 />
 
                 {/* Template Variables Guide */}
@@ -551,15 +723,41 @@ export default function TemplatesScreen() {
                 />
 
                 {selectedTemplate && (
-                  <View style={[styles.templateInfo, { backgroundColor: theme.colors.surfaceVariant }]}>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                  <View
+                    style={[
+                      styles.templateInfo,
+                      {
+                        backgroundColor: currentTheme.surface,
+                        borderColor: currentTheme.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: 'DMSans_500Medium',
+                        fontSize: isMobile ? 11 : 12,
+                        color: currentTheme.textSecondary,
+                      }}
+                    >
                       Category: {selectedTemplate.category.replace('_', ' ').toUpperCase()}
                     </Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                    <Text
+                      style={{
+                        fontFamily: 'DMSans_500Medium',
+                        fontSize: isMobile ? 11 : 12,
+                        color: currentTheme.textSecondary,
+                      }}
+                    >
                       Generated by: {selectedTemplate.generatedBy.toUpperCase()}
                     </Text>
                     {selectedTemplate.aiModel && (
-                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                      <Text
+                        style={{
+                          fontFamily: 'DMSans_500Medium',
+                          fontSize: isMobile ? 11 : 12,
+                          color: currentTheme.textSecondary,
+                        }}
+                      >
                         Model: {selectedTemplate.aiModel}
                       </Text>
                     )}
@@ -568,24 +766,132 @@ export default function TemplatesScreen() {
               </View>
             </ScrollView>
           </Dialog.ScrollArea>
-          <Dialog.Actions>
+          <Dialog.Actions
+            style={{
+              paddingHorizontal: isMobile ? spacing.md : spacing.lg,
+              paddingTop: isMobile ? spacing.sm : spacing.md,
+              paddingBottom: isMobile ? spacing.md : spacing.lg,
+            }}
+          >
             <Button
               onPress={handleDeleteTemplate}
-              textColor={theme.colors.error}
+              textColor={currentTheme.coral}
+              labelStyle={{
+                fontFamily: 'DMSans_600SemiBold',
+                fontSize: isMobile ? 13 : 14,
+              }}
+              compact={isMobile}
             >
               Delete
             </Button>
             <View style={{ flex: 1 }} />
-            <Button onPress={() => setShowEditDialog(false)}>
+            <Button
+              onPress={() => setShowEditDialog(false)}
+              labelStyle={{
+                fontFamily: 'DMSans_600SemiBold',
+                fontSize: isMobile ? 13 : 14,
+                color: currentTheme.textSecondary,
+              }}
+              compact={isMobile}
+            >
               Cancel
             </Button>
-            <Button mode="contained" onPress={handleSaveTemplate}>
+            <Button
+              mode="contained"
+              onPress={handleSaveTemplate}
+              buttonColor={currentTheme.primary}
+              labelStyle={{
+                fontFamily: 'DMSans_600SemiBold',
+                fontSize: isMobile ? 13 : 14,
+              }}
+              compact={isMobile}
+            >
               Save
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* Clear Instructions Confirmation Dialog */}
+        <Dialog
+          visible={showClearConfirmDialog}
+          onDismiss={() => setShowClearConfirmDialog(false)}
+          style={[
+            {
+              backgroundColor: currentTheme.surface,
+              maxWidth: isMobile ? '90%' : 400,
+              alignSelf: 'center',
+            },
+          ]}
+        >
+          <Dialog.Title style={{ fontFamily: 'DMSans_700Bold', fontSize: isMobile ? 16 : 18 }}>
+            Clear Instructions
+          </Dialog.Title>
+          <Dialog.Content>
+            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: isMobile ? 13 : 14, color: currentTheme.text }}>
+              Are you sure you want to clear all custom instructions?
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => setShowClearConfirmDialog(false)}
+              labelStyle={{ fontFamily: 'DMSans_600SemiBold', fontSize: isMobile ? 13 : 14 }}
+              compact={isMobile}
+            >
+              Cancel
+            </Button>
+            <Button
+              onPress={confirmClearInstructions}
+              mode="contained"
+              buttonColor={currentTheme.error || '#ef4444'}
+              labelStyle={{ fontFamily: 'DMSans_600SemiBold', fontSize: isMobile ? 13 : 14 }}
+              compact={isMobile}
+            >
+              Clear
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Delete Template Confirmation Dialog */}
+        <Dialog
+          visible={showDeleteConfirmDialog}
+          onDismiss={() => setShowDeleteConfirmDialog(false)}
+          style={[
+            {
+              backgroundColor: currentTheme.surface,
+              maxWidth: isMobile ? '90%' : 400,
+              alignSelf: 'center',
+            },
+          ]}
+        >
+          <Dialog.Title style={{ fontFamily: 'DMSans_700Bold', fontSize: isMobile ? 16 : 18 }}>
+            Delete Template
+          </Dialog.Title>
+          <Dialog.Content>
+            <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: isMobile ? 13 : 14, color: currentTheme.text }}>
+              Are you sure you want to delete this template?
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => setShowDeleteConfirmDialog(false)}
+              labelStyle={{ fontFamily: 'DMSans_600SemiBold', fontSize: isMobile ? 13 : 14 }}
+              compact={isMobile}
+            >
+              Cancel
+            </Button>
+            <Button
+              onPress={confirmDeleteTemplate}
+              mode="contained"
+              buttonColor={currentTheme.error || '#ef4444'}
+              labelStyle={{ fontFamily: 'DMSans_600SemiBold', fontSize: isMobile ? 13 : 14 }}
+              compact={isMobile}
+            >
+              Delete
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -651,54 +957,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.05)',
   },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xxl,
-    marginTop: spacing.xl,
-  },
   dialog: {
     maxHeight: '85%',
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
+    ...shadows.md,
   },
   dialogContent: {
-    paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
-  },
-  sectionLabel: {
-    marginBottom: spacing.sm,
-    fontWeight: '700',
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: '#86868B',
   },
   templateInfo: {
     padding: spacing.md,
     borderRadius: borderRadius.md,
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  variablesGuide: {
-    backgroundColor: '#e3f2fd',
-    padding: spacing.sm,
-    borderRadius: 8,
-    marginBottom: spacing.sm,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196f3',
-  },
-  optimizationButtons: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  optimizationButton: {
-    borderRadius: borderRadius.md,
-  },
-  optimizationButtonContent: {
-    paddingVertical: spacing.xs,
-  },
-  clearButton: {
-    borderRadius: borderRadius.md,
+    ...shadows.sm,
   },
 });

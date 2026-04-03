@@ -29,6 +29,22 @@ const LeadCardComponent: React.FC<LeadCardProps> = ({
   const primaryPhone = lead.phoneNumbers?.[0] || '';
   const primaryEmail = lead.emails?.[0] || '';
 
+  // Determine priority color for left border
+  const getPriorityColor = () => {
+    if (stale) return currentTheme.coral; // Stale leads = coral/red
+    switch (lead.status) {
+      case 'new':
+        return currentTheme.badgeNew; // Green for new leads
+      case 'est_sent':
+      case 'appointment':
+        return currentTheme.badgeEstSent; // Blue for hot leads
+      case 'closing':
+        return currentTheme.accent; // Amber for closing
+      default:
+        return 'transparent'; // No border for others
+    }
+  };
+
   return (
     <Pressable
       onPress={onPress}
@@ -37,6 +53,8 @@ const LeadCardComponent: React.FC<LeadCardProps> = ({
         {
           backgroundColor: currentTheme.surface,
           borderColor: currentTheme.border,
+          borderLeftColor: getPriorityColor(),
+          borderLeftWidth: getPriorityColor() !== 'transparent' ? 4 : 1,
         },
         pressed && styles.containerPressed,
       ]}
