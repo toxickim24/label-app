@@ -1,6 +1,6 @@
 /**
  * Lead Card Component
- * Displays lead information with status badge and stale warning
+ * Displays lead information with status badge
  */
 
 import React, { memo } from 'react';
@@ -10,7 +10,6 @@ import { useTheme } from 'react-native-paper';
 import { Lead } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { darkTheme, lightTheme, spacing, borderRadius, shadows } from '../theme';
-import { isLeadStale } from '../utils/leadUtils';
 
 interface LeadCardProps {
   lead: Lead;
@@ -25,13 +24,11 @@ const LeadCardComponent: React.FC<LeadCardProps> = ({
 }) => {
   const theme = useTheme();
   const currentTheme = theme.dark ? darkTheme : lightTheme;
-  const stale = isLeadStale(lead);
   const primaryPhone = lead.phoneNumbers?.[0] || '';
   const primaryEmail = lead.emails?.[0] || '';
 
   // Determine priority color for left border
   const getPriorityColor = () => {
-    if (stale) return currentTheme.coral; // Stale leads = coral/red
     switch (lead.status) {
       case 'new':
         return currentTheme.badgeNew; // Green for new leads
@@ -59,16 +56,6 @@ const LeadCardComponent: React.FC<LeadCardProps> = ({
         pressed && styles.containerPressed,
       ]}
     >
-      {/* Stale Lead Warning Banner */}
-      {stale && (
-        <View style={[styles.staleWarning, { backgroundColor: currentTheme.coral }]}>
-          <MaterialCommunityIcons name="clock-alert-outline" size={14} color="#fff" />
-          <Text style={styles.staleWarningText}>
-            Needs attention • No contact in 48+ hours
-          </Text>
-        </View>
-      )}
-
       {/* Card Content */}
       <View style={styles.content}>
         {/* Header Row: Name + Status */}
@@ -183,18 +170,6 @@ const styles = StyleSheet.create({
   containerPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.98 }],
-  },
-  staleWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    gap: spacing.xs,
-  },
-  staleWarningText: {
-    fontFamily: 'DMSans_500Medium',
-    fontSize: 11,
-    color: '#fff',
   },
   content: {
     padding: spacing.md,

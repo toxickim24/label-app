@@ -23,7 +23,7 @@ import { DashboardSkeleton, BottomSheet } from '../../components';
 import { getLeadHealth, getLeadHealthInfo } from '../../utils/leadHealth';
 import { formatRelativeTime } from '../../utils/formatRelativeTime';
 import { useResponsive } from '../../hooks/useResponsive';
-import { sortByPriority, sortByNewest, sortByOldest, filterStaleLeads } from '../../utils/leadUtils';
+import { sortByPriority, sortByNewest, sortByOldest } from '../../utils/leadUtils';
 import { showToast } from '../../utils/toast';
 import { haptics } from '../../utils/haptics';
 import { getLeadSections } from '../../utils/dateGrouping';
@@ -53,7 +53,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [refreshing, setRefreshing] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedPermitType, setSelectedPermitType] = React.useState<PermitType | 'all'>('all');
-  const [showStaleOnly, setShowStaleOnly] = React.useState(false);
   const [groupByTime, setGroupByTime] = React.useState(true); // Enable time-based grouping by default
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -107,11 +106,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       filtered = filtered.filter(lead => lead.status === statusFilter);
     }
 
-    // Filter by stale leads only
-    if (showStaleOnly) {
-      filtered = filterStaleLeads(filtered);
-    }
-
     // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -136,7 +130,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       default:
         return sortByNewest(filtered);
     }
-  }, [leads, selectedPermitType, statusFilter, searchQuery, sortBy, showStaleOnly]);
+  }, [leads, selectedPermitType, statusFilter, searchQuery, sortBy]);
 
   // Create sections for time-based grouping
   const leadSections = React.useMemo(() => {
@@ -463,7 +457,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           inputStyle={isMobile ? styles.searchInputMobile : undefined}
         />
 
-        {/* Status Filters with Stale Toggle */}
+        {/* Status Filters */}
         <View style={[styles.filtersContainer, { paddingHorizontal: isMobile ? 0 : containerPadding, paddingBottom: isMobile ? 4 : spacing.xs }]}>
           {!isMobile && (
             <Text
@@ -494,29 +488,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 {status.charAt(0).toUpperCase() + status.slice(1)}
               </Chip>
             ))}
-
-            {/* Stale Filter Toggle at end of status filters */}
-            <Chip
-              selected={showStaleOnly}
-              onPress={() => setShowStaleOnly(!showStaleOnly)}
-              compact={isMobile}
-              icon={showStaleOnly ? 'clock-alert' : 'clock-outline'}
-              style={[
-                {
-                  backgroundColor: showStaleOnly ? currentTheme.coral : theme.colors.surface,
-                  borderColor: currentTheme.coral,
-                  borderWidth: showStaleOnly ? 0 : 1,
-                  marginLeft: isMobile ? 6 : spacing.sm,
-                },
-                isMobile && styles.filterChipMobile,
-              ]}
-              textStyle={[
-                { color: showStaleOnly ? '#fff' : currentTheme.coral },
-                isMobile && styles.filterChipTextMobile,
-              ]}
-            >
-              Stale Only
-            </Chip>
           </ScrollView>
         </View>
 
@@ -644,7 +615,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                       setSearchQuery('');
                       setStatusFilter('all');
                       setSelectedPermitType('all');
-                      setShowStaleOnly(false);
                     },
                     icon: 'filter-remove',
                   }}
