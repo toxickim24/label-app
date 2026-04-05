@@ -18,7 +18,16 @@
       "backgroundColor": "#ffffff"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic",
+            "deploymentTarget": "16.0"
+          }
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
